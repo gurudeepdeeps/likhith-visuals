@@ -52,6 +52,7 @@
           <div class="coupon-row">
             <input id="coupon-code" type="text" placeholder="Enter coupon code" />
             <button class="button ghost" id="apply-coupon">Apply</button>
+            <button class="button ghost" id="clear-coupon" type="button">Clear</button>
           </div>
           <div class="coupon-message" id="coupon-message"></div>
         </div>
@@ -72,8 +73,40 @@
           </div>
         </div>
 
+        <div class="checkout-details">
+          <h2 class="section-title">Checkout details</h2>
+          <div class="details-grid">
+            <label class="detail-field">
+              <span>Full name</span>
+              <input id="checkout-name" type="text" placeholder="Enter your name" />
+            </label>
+            <label class="detail-field">
+              <span>Email for receipt</span>
+              <input id="checkout-email" type="email" placeholder="name@email.com" />
+            </label>
+            <label class="detail-field">
+              <span>Phone number</span>
+              <input id="checkout-phone" type="tel" placeholder="+91" />
+            </label>
+          </div>
+          <p class="detail-note">Receipt email is sent after payment.</p>
+        </div>
+
         <div class="cart-actions">
           <button class="button solid" id="checkout-button">Check Out</button>
+        </div>
+      </section>
+
+      <section class="order-history">
+        <div class="order-history-header">
+          <h2 class="section-title">Payment history</h2>
+          <button class="button ghost" id="clear-order-history" type="button">
+            Clear history
+          </button>
+        </div>
+        <div id="order-history-list" class="order-history-list"></div>
+        <div id="order-history-empty" class="order-history-empty">
+          No past orders yet.
         </div>
       </section>
     </main>
@@ -124,6 +157,8 @@
       </div>
       <div class="footer-note">© 2026, Likhith Visuals</div>
     </footer>
+    <script src="https://checkout.razorpay.com/v1/checkout.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@emailjs/browser@4/dist/email.min.js"></script>
     <script src="script.js" defer></script>
   </body>
 </html>

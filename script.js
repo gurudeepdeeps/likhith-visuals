@@ -1,6 +1,13 @@
 const STORAGE_KEY = "faxpc-cart";
 const SEED_KEY = "faxpc-cart-seeded";
 const COUPON_KEY = "faxpc-coupon";
+const ORDER_HISTORY_KEY = "faxpc-order-history";
+const LAST_ORDER_KEY = "faxpc-last-order";
+const CHECKOUT_DETAILS_KEY = "faxpc-checkout-details";
+
+const EMAILJS_PUBLIC_KEY = "B7zVzclIjXPJJ6C0D";
+const EMAILJS_SERVICE_ID = "service_5bgbrab";
+const EMAILJS_TEMPLATE_ID = "template_vqs92b6";
 
 const couponCatalog = {
   SAVE10: { type: "percent", value: 10 },
@@ -31,7 +38,7 @@ const sampleItems = [
     image: "assets/premium-photoshop.jpg",
   },
 ];
-
+// Product catalog with 15 items
 const productCatalog = [
   {
     id: "gaming-subtitle-presets",
@@ -53,7 +60,7 @@ const productCatalog = [
     price: 15,
     oldPrice: 99,
     tag: "3/PRESET",
-    image: "assets/crazy-transition.jpg",
+    image: "assets/p2.jpg",
     rating: 4.8,
     description: "Quick transition presets for punchy edits.",
     features: ["3 ready-to-use transitions for Premiere Pro."],
@@ -64,7 +71,7 @@ const productCatalog = [
     price: 49,
     oldPrice: 389,
     tag: "2+/ZIP FILE",
-    image: "assets/bbs-transition.jpg",
+    image: "assets/p3.jpg",
     rating: 4.7,
     description: "Transition files for energetic BBS-style edits.",
     features: ["2+ transition files for Premiere Pro."],
@@ -75,7 +82,7 @@ const productCatalog = [
     price: 51,
     oldPrice: 129,
     tag: "13+/ZIP FILE",
-    image: "assets/premium-photoshop.jpg",
+    image: "assets/p4.jpg",
     rating: 4.7,
     description: "Premium Photoshop resources for creators.",
     features: ["13+ assets compatible with Photoshop CC."],
@@ -86,7 +93,7 @@ const productCatalog = [
     price: 29,
     oldPrice: 99,
     tag: "30+/ZIP FILE",
-    image: "assets/fonts-pack.jpg",
+    image: "assets/p5.jpg",
     rating: 4.6,
     description: "A font pack to level up your designs.",
     features: ["30+ fonts bundled in one zip."],
@@ -97,7 +104,7 @@ const productCatalog = [
     price: 51,
     oldPrice: 129,
     tag: "3+/ZIP FILE",
-    image: "assets/pfp-transition.jpg",
+    image: "assets/p6.jpg",
     rating: 4.6,
     description: "Smooth profile transition assets for edits.",
     features: ["3+ transition files ready to drop in."],
@@ -108,7 +115,7 @@ const productCatalog = [
     price: 99,
     oldPrice: 229,
     tag: "2+/ZIP FILE",
-    image: "assets/reel-editing.jpg",
+    image: "assets/p7.jpg",
     rating: 4.9,
     description: "Premiere Pro reels project files for fast edits.",
     features: ["2+ project files built for vertical reels."],
@@ -119,7 +126,7 @@ const productCatalog = [
     price: 31,
     oldPrice: 499,
     tag: "20+/ZIP FILE",
-    image: "assets/creative-bgs.jpg",
+    image: "assets/p8.jpg",
     rating: 4.5,
     description: "Creative background pack for any design.",
     features: ["20+ high-res backgrounds."],
@@ -130,7 +137,7 @@ const productCatalog = [
     price: 199,
     oldPrice: 399,
     tag: "10+/PNG FILE",
-    image: "assets/gaming-intro.jpg",
+    image: "assets/p9.jpg",
     rating: 4.8,
     description: "Gaming intro assets for bold openers.",
     features: ["10+ PNG elements for intros."],
@@ -141,7 +148,7 @@ const productCatalog = [
     price: 49,
     oldPrice: 299,
     tag: "3+/PNG FILE",
-    image: "assets/cool-transitions.jpg",
+    image: "assets/p10.jpg",
     rating: 4.7,
     description: "Cool transitions pack for creative edits.",
     features: ["3+ transition overlays for Premiere Pro."],
@@ -152,7 +159,7 @@ const productCatalog = [
     price: 35,
     oldPrice: 199,
     tag: "3+/PNG FILES",
-    image: "assets/bgm1-xp-characters.jpg",
+    image: "assets/p11.jpg",
     rating: 4.6,
     description: "Character pack for stylized edits.",
     features: ["3+ PNG character assets."],
@@ -163,7 +170,7 @@ const productCatalog = [
     price: 35,
     oldPrice: 299,
     tag: "10+/PNG FILE",
-    image: "assets/crazy-facecams.jpg",
+    image: "assets/p12.jpg",
     rating: 4.6,
     description: "Facecam overlays for creators.",
     features: ["10+ PNG facecam frames."],
@@ -174,7 +181,7 @@ const productCatalog = [
     price: 15,
     oldPrice: 299,
     tag: "10+/PNG FILE",
-    image: "assets/trading-bgs.jpg",
+    image: "assets/p13.jpg",
     rating: 4.4,
     description: "Trading-themed background pack.",
     features: ["10+ PNG backgrounds."],
@@ -185,7 +192,7 @@ const productCatalog = [
     price: 31,
     oldPrice: 129,
     tag: "15+/ZIP FILE",
-    image: "assets/bgm-4-1-update-bgs.jpg",
+    image: "assets/p14.jpg",
     rating: 4.5,
     description: "Updated background set for BGM 4.1 style edits.",
     features: ["15+ backgrounds in one zip."],
@@ -196,7 +203,7 @@ const productCatalog = [
     price: 99,
     oldPrice: 499,
     tag: "ORDER NOW",
-    image: "assets/song-edit-project.jpg",
+    image: "assets/p15.jpg",
     rating: 4.8,
     description: "Song edit project file for fast production.",
     features: ["Editable project file with organized layers."],
@@ -207,7 +214,7 @@ const productCatalog = [
     price: 129,
     oldPrice: 549,
     tag: "ORDER NOW",
-    image: "assets/minecraft-cool-intro.jpg",
+    image: "assets/p16.jpg",
     rating: 4.8,
     description: "Minecraft-inspired intro assets and project.",
     features: ["Intro file plus layered assets."],
@@ -270,6 +277,116 @@ const saveCoupon = (coupon) => {
   }
 
   localStorage.setItem(COUPON_KEY, JSON.stringify(coupon));
+};
+
+const loadOrderHistory = () => {
+  const raw = localStorage.getItem(ORDER_HISTORY_KEY);
+  if (!raw) {
+    return [];
+  }
+
+  try {
+    const parsed = JSON.parse(raw);
+    return Array.isArray(parsed) ? parsed : [];
+  } catch (error) {
+    return [];
+  }
+};
+
+const saveOrderHistory = (orders) => {
+  localStorage.setItem(ORDER_HISTORY_KEY, JSON.stringify(orders));
+};
+
+const loadLastOrder = () => {
+  const raw = localStorage.getItem(LAST_ORDER_KEY);
+  if (!raw) {
+    return null;
+  }
+
+  try {
+    return JSON.parse(raw);
+  } catch (error) {
+    return null;
+  }
+};
+
+const saveLastOrder = (order) => {
+  localStorage.setItem(LAST_ORDER_KEY, JSON.stringify(order));
+};
+
+const loadCheckoutDetails = () => {
+  const raw = localStorage.getItem(CHECKOUT_DETAILS_KEY);
+  if (!raw) {
+    return { name: "", email: "", phone: "" };
+  }
+
+  try {
+    const parsed = JSON.parse(raw);
+    return {
+      name: parsed?.name || "",
+      email: parsed?.email || "",
+      phone: parsed?.phone || "",
+    };
+  } catch (error) {
+    return { name: "", email: "", phone: "" };
+  }
+};
+
+const saveCheckoutDetails = (details) => {
+  localStorage.setItem(CHECKOUT_DETAILS_KEY, JSON.stringify(details));
+};
+
+const isEmailJsConfigured = () => {
+  const values = [EMAILJS_PUBLIC_KEY, EMAILJS_SERVICE_ID, EMAILJS_TEMPLATE_ID];
+  return values.every((value) => value && !value.startsWith("YOUR_"));
+};
+
+const initEmailJs = () => {
+  if (!window.emailjs || !isEmailJsConfigured()) {
+    return;
+  }
+
+  window.emailjs.init(EMAILJS_PUBLIC_KEY);
+};
+
+const sendOrderEmail = (order) => {
+  if (!window.emailjs || !isEmailJsConfigured()) {
+    return;
+  }
+
+  if (!order?.customer?.email) {
+    return;
+  }
+
+  const orders = (order.items || []).map((item) => ({
+    image_url: item.image || "",
+    name: item.title,
+    units: item.qty,
+    price: Number(item.price || 0).toFixed(2),
+  }));
+
+  const cost = {
+    shipping: "0.00",
+    tax: "0.00",
+    total: Number(order.amount || 0).toFixed(2),
+  };
+
+  window.emailjs
+    .send(EMAILJS_SERVICE_ID, EMAILJS_TEMPLATE_ID, {
+      order_id: order.id,
+      orders,
+      cost,
+      email: order.customer.email,
+      customer_name: order.customer.name || "Customer",
+      customer_email: order.customer.email,
+      customer_phone: order.customer.phone || "",
+      payment_id: order.paymentId || "",
+      order_total: formatPrice(order.amount),
+      order_date: new Date(order.createdAt).toLocaleString(),
+    })
+    .catch((error) => {
+      console.error("Email send failed:", error);
+    });
 };
 
 const ensureSeededCart = () => {
@@ -350,6 +467,165 @@ const updateSubtotal = (cart) => {
   if (discountRow) {
     discountRow.style.display = discount > 0 ? "flex" : "none";
   }
+};
+
+const calculateSubtotal = (cart) =>
+  cart.reduce((sum, item) => sum + item.price * item.qty, 0);
+
+const calculateDiscount = (subtotal, coupon) => {
+  if (!coupon || subtotal <= 0) {
+    return 0;
+  }
+
+  let discount = 0;
+  if (coupon.type === "percent") {
+    discount = (subtotal * coupon.value) / 100;
+  }
+  if (coupon.type === "flat") {
+    discount = coupon.value;
+  }
+
+  return Math.min(discount, subtotal);
+};
+
+const buildOrderRecord = ({ cart, subtotal, discount, total, payment, customer }) => ({
+  id: `LV-${Date.now()}`,
+  createdAt: new Date().toISOString(),
+  subtotal,
+  discount,
+  amount: total,
+  currency: "INR",
+  paymentId: payment?.razorpay_payment_id || "",
+  orderId: payment?.razorpay_order_id || "",
+  signature: payment?.razorpay_signature || "",
+  items: cart.map((item) => ({
+    id: item.id,
+    title: item.title,
+    qty: item.qty,
+    price: item.price,
+    image: normalizeImagePath(item.image),
+  })),
+  customer: {
+    name: customer?.name || "",
+    email: customer?.email || "",
+    phone: customer?.phone || "",
+  },
+});
+
+const renderOrderHistory = () => {
+  const list = document.getElementById("order-history-list");
+  const emptyState = document.getElementById("order-history-empty");
+  if (!list || !emptyState) {
+    return;
+  }
+
+  const history = loadOrderHistory();
+  list.innerHTML = "";
+
+  if (history.length === 0) {
+    emptyState.style.display = "block";
+    return;
+  }
+
+  emptyState.style.display = "none";
+
+  history.forEach((order) => {
+    const card = document.createElement("div");
+    card.className = "order-history-card";
+    const date = order.createdAt
+      ? new Date(order.createdAt).toLocaleString()
+      : "";
+    const items = (order.items || [])
+      .map((item) => `${item.title} x${item.qty}`)
+      .join(", ");
+    card.innerHTML = `
+      <div>
+        <div class="order-history-title">Order ${order.id}</div>
+        <div class="order-history-meta">${date}</div>
+        <div class="order-history-items">${items || "No items"}</div>
+      </div>
+      <div class="order-history-total">${formatPrice(order.amount || 0)}</div>
+    `;
+    list.appendChild(card);
+  });
+};
+
+const setupOrderHistoryActions = () => {
+  const button = document.getElementById("clear-order-history");
+  if (!button) {
+    return;
+  }
+
+  button.addEventListener("click", () => {
+    if (!window.confirm("Clear all stored orders?")) {
+      return;
+    }
+
+    saveOrderHistory([]);
+    renderOrderHistory();
+  });
+};
+
+const setupCheckoutDetails = () => {
+  const nameInput = document.getElementById("checkout-name");
+  const emailInput = document.getElementById("checkout-email");
+  const phoneInput = document.getElementById("checkout-phone");
+  if (!nameInput || !emailInput || !phoneInput) {
+    return;
+  }
+
+  const saved = loadCheckoutDetails();
+  nameInput.value = saved.name;
+  emailInput.value = saved.email;
+  phoneInput.value = saved.phone;
+
+  const persist = () => {
+    saveCheckoutDetails({
+      name: nameInput.value.trim(),
+      email: emailInput.value.trim(),
+      phone: phoneInput.value.trim(),
+    });
+  };
+
+  [nameInput, emailInput, phoneInput].forEach((input) => {
+    input.addEventListener("input", persist);
+  });
+};
+
+const renderOrderSuccess = () => {
+  const summary = document.getElementById("order-success-summary");
+  const items = document.getElementById("order-success-items");
+  if (!summary || !items) {
+    return;
+  }
+
+  const order = loadLastOrder();
+  if (!order) {
+    summary.textContent = "We could not find your latest order.";
+    items.innerHTML = "";
+    return;
+  }
+
+  const date = order.createdAt
+    ? new Date(order.createdAt).toLocaleString()
+    : "";
+  summary.innerHTML = `
+    <div><strong>Order ID:</strong> ${order.id}</div>
+    <div><strong>Payment ID:</strong> ${order.paymentId || "--"}</div>
+    <div><strong>Date:</strong> ${date}</div>
+    <div><strong>Total:</strong> ${formatPrice(order.amount || 0)}</div>
+  `;
+
+  items.innerHTML = (order.items || [])
+    .map(
+      (item) => `
+        <div class="order-success-item">
+          <span>${item.title}</span>
+          <span>x${item.qty}</span>
+        </div>
+      `
+    )
+    .join("");
 };
 
 const renderCart = (cart) => {
@@ -601,6 +877,79 @@ const setupProductDetailsPage = () => {
   document.title = `${product.title} - Likhith Visuals`;
 };
 
+const renderHomeProducts = () => {
+  if (document.body.dataset.page !== "home") {
+    return;
+  }
+
+  const grid = document.getElementById("product-grid") || document.querySelector(".product-grid");
+  if (!grid) {
+    return;
+  }
+
+  const thumbClasses = [
+    "thumb-blue",
+    "thumb-purple",
+    "thumb-yellow",
+    "thumb-emerald",
+    "thumb-teal",
+    "thumb-lime",
+    "thumb-indigo",
+    "thumb-violet",
+    "thumb-slate",
+    "thumb-cyan",
+    "thumb-red",
+    "thumb-magenta",
+    "thumb-navy",
+    "thumb-ice",
+    "thumb-cream",
+    "thumb-steel",
+  ];
+
+  grid.innerHTML = "";
+
+  productCatalog.forEach((product, index) => {
+    const card = document.createElement("article");
+    card.className = "product-card";
+
+    const thumbClass = thumbClasses[index % thumbClasses.length];
+
+    card.innerHTML = `
+      <a class="product-link" href="product.html">
+        <div class="card-badge">${product.tag}</div>
+        <div class="thumb ${thumbClass}">
+          <div class="thumb-tag">${product.tag}</div>
+        </div>
+        <h3>${product.title}</h3>
+        <div class="price-row">
+          <span class="price">${formatPrice(product.price)}</span>
+          <span class="price-old">${formatPrice(product.oldPrice)}</span>
+        </div>
+      </a>
+      <button
+        class="button ghost card-add add-to-cart"
+        data-id="${product.id}"
+        data-title="${product.title}"
+        data-price="${product.price}"
+        data-image="${normalizeImagePath(product.image)}"
+      >
+        Add to Cart
+      </button>
+      <button
+        class="button solid card-buy buy-now"
+        data-id="${product.id}"
+        data-title="${product.title}"
+        data-price="${product.price}"
+        data-image="${normalizeImagePath(product.image)}"
+      >
+        Buy Now
+      </button>
+    `;
+
+    grid.appendChild(card);
+  });
+};
+
 const setupSort = () => {
   const sortSelect = document.getElementById("product-sort");
   const grid = document.querySelector(".product-grid");
@@ -720,19 +1069,84 @@ const setupCheckout = () => {
       return;
     }
 
-    window.alert("Checkout completed (demo). Thank you!");
-    saveCart([]);
-    saveCoupon(null);
-    renderCart([]);
-    updateCartBadge();
+    // Calculate totals
+    const coupon = loadCoupon();
+    const subtotal = calculateSubtotal(cart);
+    const discount = calculateDiscount(subtotal, coupon);
+    const total = subtotal - discount;
+
+    const details = loadCheckoutDetails();
+
+    // Razorpay configuration
+    const options = {
+      key: "rzp_test_SEt9hM8Wuar2cX", // Replace with your Razorpay Key ID (use test key for testing)
+      amount: total * 100, // Amount in paise (multiply by 100)
+      currency: "INR",
+      name: "Likhith Visuals",
+      description: "Purchase of Digital Products",
+      image: "assets/logo.png",
+      handler: function (response) {
+        const order = buildOrderRecord({
+          cart,
+          subtotal,
+          discount,
+          total,
+          payment: response,
+          customer: details,
+        });
+
+        const history = loadOrderHistory();
+        history.unshift(order);
+        saveOrderHistory(history);
+        saveLastOrder(order);
+        sendOrderEmail(order);
+
+        // Clear cart after successful payment
+        saveCart([]);
+        saveCoupon(null);
+        renderCart([]);
+        updateCartBadge();
+
+        window.location.href = "order-success.html";
+      },
+      prefill: {
+        name: details.name,
+        email: details.email,
+        contact: details.phone,
+      },
+      notes: {
+        cart_items: cart.map((item) => `${item.title} (${item.qty})`).join(", "),
+      },
+      theme: {
+        color: "#000000",
+      },
+      modal: {
+        ondismiss: function () {
+          console.log("Payment cancelled by user");
+        },
+      },
+    };
+
+    // Create Razorpay instance and open checkout
+    const rzp = new Razorpay(options);
+    
+    rzp.on("payment.failed", function (response) {
+      console.error("Payment failed:", response.error);
+      window.alert(
+        `Payment Failed!\n\nReason: ${response.error.description}\n\nPlease try again or contact support.`
+      );
+    });
+    
+    rzp.open();
   });
 };
 
 const setupCoupon = () => {
   const input = document.getElementById("coupon-code");
   const button = document.getElementById("apply-coupon");
+  const clearButton = document.getElementById("clear-coupon");
   const message = document.getElementById("coupon-message");
-  if (!input || !button || !message) {
+  if (!input || !button || !message || !clearButton) {
     return;
   }
 
@@ -763,7 +1177,15 @@ const setupCoupon = () => {
     updateSubtotal(loadCart() || []);
   };
 
+  const clearCoupon = () => {
+    input.value = "";
+    saveCoupon(null);
+    updateMessage("Coupon cleared.");
+    updateSubtotal(loadCart() || []);
+  };
+
   button.addEventListener("click", applyCoupon);
+  clearButton.addEventListener("click", clearCoupon);
   input.addEventListener("keydown", (event) => {
     if (event.key === "Enter") {
       event.preventDefault();
@@ -780,13 +1202,22 @@ const setupCoupon = () => {
 
 document.addEventListener("DOMContentLoaded", () => {
   updateCartBadge();
+  initEmailJs();
 
   if (document.body.dataset.page === "cart") {
     const cart = ensureSeededCart();
     renderCart(cart);
     handleCartActions();
+    setupCheckoutDetails();
+    renderOrderHistory();
+    setupOrderHistoryActions();
   }
 
+  if (document.body.dataset.page === "order-success") {
+    renderOrderSuccess();
+  }
+
+  renderHomeProducts();
   setupAddToCart();
   setupSort();
   setupBuyNow();

@@ -668,6 +668,151 @@ a {
   flex-wrap: wrap;
 }
 
+.section-title {
+  font-size: 16px;
+  font-weight: 800;
+}
+
+.checkout-details {
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 16px;
+  background: #fff;
+  display: grid;
+  gap: 12px;
+}
+
+.details-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 12px;
+}
+
+.detail-field {
+  display: grid;
+  gap: 6px;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.detail-field input {
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 10px 12px;
+  font-family: inherit;
+  font-size: 13px;
+}
+
+.detail-note {
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.order-history {
+  margin-top: 32px;
+  display: grid;
+  gap: 12px;
+}
+
+.order-history-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.order-history-list {
+  display: grid;
+  gap: 12px;
+}
+
+.order-history-card {
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 16px;
+  background: #fff;
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+  align-items: flex-start;
+}
+
+.order-history-title {
+  font-weight: 700;
+  font-size: 13px;
+  margin-bottom: 4px;
+}
+
+.order-history-meta {
+  font-size: 12px;
+  color: var(--muted);
+  margin-bottom: 6px;
+}
+
+.order-history-items {
+  font-size: 12px;
+  color: #2a2a2a;
+}
+
+.order-history-total {
+  font-weight: 800;
+  font-size: 14px;
+}
+
+.order-history-empty {
+  border: 1px dashed var(--border);
+  border-radius: 12px;
+  padding: 16px;
+  text-align: center;
+  color: var(--muted);
+}
+
+.order-success {
+  display: grid;
+  justify-content: center;
+}
+
+.order-success-card {
+  max-width: 720px;
+  width: 100%;
+  background: #fff;
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  padding: 24px;
+  display: grid;
+  gap: 16px;
+}
+
+.order-success-card h1 {
+  font-size: 24px;
+}
+
+.order-success-summary {
+  display: grid;
+  gap: 6px;
+  font-size: 13px;
+}
+
+.order-success-items {
+  border-top: 1px solid var(--border);
+  padding-top: 12px;
+  display: grid;
+  gap: 8px;
+  font-size: 13px;
+}
+
+.order-success-item {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.order-success-actions {
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
 .site-footer {
   background: var(--black);
   color: #fff;
