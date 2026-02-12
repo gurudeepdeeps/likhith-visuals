@@ -109,6 +109,61 @@
           No past orders yet.
         </div>
       </section>
+
+      <div class="qr-modal" id="qr-modal" aria-hidden="true">
+        <div
+          class="qr-modal-card"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="qr-modal-title"
+        >
+          <button class="qr-close" type="button" id="qr-close" aria-label="Close">
+            x
+          </button>
+          <h2 id="qr-modal-title">Pay with UPI QR</h2>
+          <p class="qr-subtitle">
+            Scan the QR with any UPI app and enter the transaction ID.
+          </p>
+          <div class="qr-grid">
+            <div class="qr-box">
+              <img id="qr-image" alt="UPI QR code" />
+              <div class="qr-amount" id="qr-amount">Rs. 0.00</div>
+            </div>
+            <div class="qr-details">
+              <div class="qr-row">
+                <span>UPI ID</span>
+                <strong id="upi-id-text">yourupi@bank</strong>
+              </div>
+              <div class="qr-actions">
+                <button class="button ghost" id="copy-upi" type="button">
+                  Copy UPI ID
+                </button>
+                <a
+                  class="button ghost"
+                  id="open-upi-link"
+                  href="#"
+                  target="_blank"
+                  rel="noopener"
+                >
+                  Open UPI App
+                </a>
+              </div>
+              <label class="detail-field">
+                <span>Transaction ID (UTR)</span>
+                <input
+                  id="upi-transaction-id"
+                  type="text"
+                  placeholder="Enter transaction ID"
+                />
+              </label>
+              <button class="button solid" id="confirm-upi-payment" type="button">
+                I have paid
+              </button>
+              <p class="detail-note">Orders are marked pending until verified.</p>
+            </div>
+          </div>
+        </div>
+      </div>
     </main>
 
     <a
@@ -157,7 +212,6 @@
       </div>
       <div class="footer-note">© 2026, Likhith Visuals</div>
     </footer>
-    <script src="https://checkout.razorpay.com/v1/checkout.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/@emailjs/browser@4/dist/email.min.js"></script>
     <script src="script.js" defer></script>
   </body>

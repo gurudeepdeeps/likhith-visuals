@@ -1,0 +1,175 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Admin Panel - Likhith Visuals</title>
+    <link rel="icon" type="image/png" href="assets/logo.png" />
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body data-page="admin">
+    <div class="announcement">Admin Panel</div>
+
+    <header class="site-header">
+      <div class="header-left">
+        <a class="logo-left" href="index.html" aria-label="Likhith Visuals home">
+          <img class="logo-image" src="assets/logo.png" alt="Likhith Visuals logo" />
+        </a>
+      </div>
+      <div class="logo">Admin Panel</div>
+      <div class="header-actions">
+        <button class="button ghost" id="admin-logout" type="button">Logout</button>
+      </div>
+    </header>
+
+    <!-- Login Section -->
+    <div class="admin-login" id="admin-login">
+      <div class="admin-login-card">
+        <h1>Admin Login</h1>
+        <form id="admin-login-form">
+          <label class="detail-field">
+            <span>Password</span>
+            <input id="admin-password" type="password" placeholder="Enter admin password" required />
+          </label>
+          <button class="button solid" type="submit">Login</button>
+          <div class="admin-error" id="admin-login-error"></div>
+        </form>
+      </div>
+    </div>
+
+    <!-- Admin Dashboard -->
+    <main class="page admin-dashboard" id="admin-dashboard" style="display: none">
+      <nav class="admin-tabs">
+        <button class="admin-tab active" data-tab="orders">Orders</button>
+        <button class="admin-tab" data-tab="products">Products</button>
+      </nav>
+
+      <!-- Orders Tab -->
+      <section class="admin-section" id="tab-orders">
+        <div class="admin-section-header">
+          <h2 class="section-title">All Orders</h2>
+          <div class="admin-actions">
+            <button class="button ghost" id="refresh-orders" type="button">Refresh</button>
+            <button class="button ghost" id="export-orders" type="button">Export CSV</button>
+          </div>
+        </div>
+
+        <div class="admin-stats">
+          <div class="stat-card">
+            <div class="stat-value" id="stat-total-orders">0</div>
+            <div class="stat-label">Total Orders</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-value" id="stat-pending">0</div>
+            <div class="stat-label">Pending</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-value" id="stat-revenue">Rs. 0</div>
+            <div class="stat-label">Total Revenue</div>
+          </div>
+        </div>
+
+        <div class="admin-table-wrapper">
+          <table class="admin-table" id="orders-table">
+            <thead>
+              <tr>
+                <th>Order ID</th>
+                <th>Date</th>
+                <th>Customer</th>
+                <th>Email</th>
+                <th>Phone</th>
+                <th>UTR</th>
+                <th>Amount</th>
+                <th>Status</th>
+                <th>Method</th>
+                <th>Items</th>
+              </tr>
+            </thead>
+            <tbody id="orders-table-body">
+              <tr>
+                <td colspan="10" style="text-align: center; padding: 24px">No orders yet</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <!-- Products Tab -->
+      <section class="admin-section" id="tab-products" style="display: none">
+        <div class="admin-section-header">
+          <h2 class="section-title">Manage Products</h2>
+          <button class="button solid" id="add-product-btn" type="button">Add Product</button>
+        </div>
+
+        <div class="products-grid" id="products-grid"></div>
+      </section>
+    </main>
+
+    <!-- Add/Edit Product Modal -->
+    <div class="qr-modal" id="product-modal" aria-hidden="true">
+      <div class="qr-modal-card product-modal-card" role="dialog" aria-modal="true">
+        <button class="qr-close" type="button" id="product-modal-close" aria-label="Close">x</button>
+        <h2 id="product-modal-title">Add Product</h2>
+
+        <form id="product-form" class="product-form">
+          <input type="hidden" id="product-edit-id" />
+
+          <label class="detail-field">
+            <span>Product ID</span>
+            <input id="product-id" type="text" placeholder="e.g., gaming-subtitle-presets" required />
+          </label>
+
+          <label class="detail-field">
+            <span>Title</span>
+            <input id="product-title" type="text" placeholder="Product name" required />
+          </label>
+
+          <div class="detail-grid">
+            <label class="detail-field">
+              <span>Price (Rs.)</span>
+              <input id="product-price" type="number" min="0" placeholder="99" required />
+            </label>
+            <label class="detail-field">
+              <span>Old Price (Rs.)</span>
+              <input id="product-old-price" type="number" min="0" placeholder="299" />
+            </label>
+          </div>
+
+          <div class="detail-grid">
+            <label class="detail-field">
+              <span>Tag</span>
+              <input id="product-tag" type="text" placeholder="SALE" required />
+            </label>
+            <label class="detail-field">
+              <span>Rating</span>
+              <input id="product-rating" type="number" min="0" max="5" step="0.1" placeholder="4.9" />
+            </label>
+          </div>
+
+          <label class="detail-field">
+            <span>Image URL</span>
+            <input id="product-image" type="text" placeholder="assets/p1.jpg" required />
+          </label>
+
+          <label class="detail-field">
+            <span>Description</span>
+            <textarea id="product-description" rows="3" placeholder="Product description"></textarea>
+          </label>
+
+          <label class="detail-field">
+            <span>Features (one per line)</span>
+            <textarea id="product-features" rows="3" placeholder="Feature 1&#10;Feature 2"></textarea>
+          </label>
+
+          <div class="product-form-actions">
+            <button class="button solid" type="submit">Save Product</button>
+            <button class="button ghost" type="button" id="product-form-cancel">Cancel</button>
+          </div>
+        </form>
+      </div>
+    </div>
+
+    <script src="script.js"></script>
+    <script src="admin.js"></script>
+  </body>
+</html>

@@ -8,6 +8,21 @@ const CHECKOUT_DETAILS_KEY = "faxpc-checkout-details";
 const EMAILJS_PUBLIC_KEY = "B7zVzclIjXPJJ6C0D";
 const EMAILJS_SERVICE_ID = "service_5bgbrab";
 const EMAILJS_TEMPLATE_ID = "template_vqs92b6";
+const EMAILJS_ADMIN_TEMPLATE_ID = "template_admin_notify";
+
+const GOOGLE_SHEETS_API_KEY = "AIzaSyCds-5egUXoYvVzbcHQJzUEm2_X8QZUwQo";
+const GOOGLE_SHEETS_SPREADSHEET_ID = "1SAbW4HGsCBFGfFJHvtDXXN9yDo1Y59Il3SOO_8zd878";
+const GOOGLE_SHEETS_RANGE = "Orders!A:K";
+
+const ADMIN_EMAIL = "likhithlikhith278@gmail.com";
+const ADMIN_PASSWORD = "Likhith@14";
+
+const UPI_ID = "8310577983-4@ybl";
+const UPI_PAYEE_NAME = "LIKHITH D A";
+const UPI_NOTE = "Order payment";
+const UPI_QR_FALLBACK_IMAGE = "assets/qr-code.png";
+
+let upiCheckoutContext = null;
 
 const couponCatalog = {
   SAVE10: { type: "percent", value: 10 },
@@ -223,6 +238,8 @@ const productCatalog = [
 
 const formatPrice = (value) => `Rs. ${value.toFixed(2)}`;
 
+const createOrderId = () => `LV-${Date.now()}`;
+
 const normalizeImagePath = (path) => {
   if (!path) {
     return "assets/placeholder.jpg";
@@ -380,13 +397,93 @@ const sendOrderEmail = (order) => {
       customer_name: order.customer.name || "Customer",
       customer_email: order.customer.email,
       customer_phone: order.customer.phone || "",
-      payment_id: order.paymentId || "",
       order_total: formatPrice(order.amount),
       order_date: new Date(order.createdAt).toLocaleString(),
     })
     .catch((error) => {
       console.error("Email send failed:", error);
     });
+};
+
+const sendAdminNotification = (order) => {
+  if (!window.emailjs || !isEmailJsConfigured()) {
+    return;
+  }
+
+  const itemsList = (order.items || [])
+    .map((item) => `${item.title} x${item.qty} - Rs. ${item.price}`)
+    .join("\n");
+
+  window.emailjs
+    .send(EMAILJS_SERVICE_ID, EMAILJS_ADMIN_TEMPLATE_ID, {
+      to_email: ADMIN_EMAIL,
+      order_id: order.id,
+      transaction_id: order.transactionId || "N/A",
+      customer_name: order.customer.name || "N/A",
+      customer_email: order.customer.email || "N/A",
+      customer_phone: order.customer.phone || "N/A",
+      order_items: itemsList,
+      order_total: formatPrice(order.amount),
+      payment_status: order.paymentStatus || "pending",
+      payment_method: order.paymentMethod || "UPI QR",
+      order_date: new Date(order.createdAt).toLocaleString(),
+    })
+    .catch((error) => {
+      console.error("Admin email failed:", error);
+    });
+};
+
+const isGoogleSheetsConfigured = () => {
+  return (
+    GOOGLE_SHEETS_API_KEY &&
+    !GOOGLE_SHEETS_API_KEY.startsWith("YOUR_") &&
+    GOOGLE_SHEETS_SPREADSHEET_ID &&
+    !GOOGLE_SHEETS_SPREADSHEET_ID.startsWith("YOUR_")
+  );
+};
+
+const submitOrderToGoogleSheets = async (order) => {
+  if (!isGoogleSheetsConfigured()) {
+    console.warn("Google Sheets not configured");
+    return;
+  }
+
+  try {
+    const row = [
+      order.id,
+      new Date(order.createdAt).toLocaleString(),
+      order.customer.name || "",
+      order.customer.email || "",
+      order.customer.phone || "",
+      order.transactionId || "",
+      order.amount,
+      order.paymentStatus || "pending",
+      order.paymentMethod || "UPI QR",
+      (order.items || []).map((item) => `${item.title} x${item.qty}`).join(", "),
+      order.discount || 0,
+    ];
+
+    const response = await fetch(
+      `https://sheets.googleapis.com/v4/spreadsheets/${GOOGLE_SHEETS_SPREADSHEET_ID}/values/${GOOGLE_SHEETS_RANGE}:append?valueInputOption=RAW&key=${GOOGLE_SHEETS_API_KEY}`,
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          values: [row],
+        }),
+      }
+    );
+
+    if (!response.ok) {
+      throw new Error(`Google Sheets API error: ${response.status}`);
+    }
+
+    console.log("Order submitted to Google Sheets");
+  } catch (error) {
+    console.error("Failed to submit to Google Sheets:", error);
+  }
 };
 
 const ensureSeededCart = () => {
@@ -488,16 +585,28 @@ const calculateDiscount = (subtotal, coupon) => {
   return Math.min(discount, subtotal);
 };
 
-const buildOrderRecord = ({ cart, subtotal, discount, total, payment, customer }) => ({
-  id: `LV-${Date.now()}`,
+const buildOrderRecord = ({
+  orderId,
+  cart,
+  subtotal,
+  discount,
+  total,
+  payment,
+  customer,
+  paymentMethod,
+  paymentStatus,
+  transactionId,
+}) => ({
+  id: orderId || createOrderId(),
   createdAt: new Date().toISOString(),
   subtotal,
   discount,
   amount: total,
   currency: "INR",
-  paymentId: payment?.razorpay_payment_id || "",
-  orderId: payment?.razorpay_order_id || "",
-  signature: payment?.razorpay_signature || "",
+  paymentId: payment?.transactionId || "",
+  transactionId: transactionId || payment?.transactionId || "",
+  paymentMethod: paymentMethod || "unknown",
+  paymentStatus: paymentStatus || "paid",
   items: cart.map((item) => ({
     id: item.id,
     title: item.title,
@@ -538,11 +647,14 @@ const renderOrderHistory = () => {
     const items = (order.items || [])
       .map((item) => `${item.title} x${item.qty}`)
       .join(", ");
+    const status = order.paymentStatus ? `Status: ${order.paymentStatus}` : "";
+    const method = order.paymentMethod ? `Method: ${order.paymentMethod}` : "";
     card.innerHTML = `
       <div>
         <div class="order-history-title">Order ${order.id}</div>
         <div class="order-history-meta">${date}</div>
         <div class="order-history-items">${items || "No items"}</div>
+        <div class="order-history-status">${[status, method].filter(Boolean).join(" | ")}</div>
       </div>
       <div class="order-history-total">${formatPrice(order.amount || 0)}</div>
     `;
@@ -611,7 +723,8 @@ const renderOrderSuccess = () => {
     : "";
   summary.innerHTML = `
     <div><strong>Order ID:</strong> ${order.id}</div>
-    <div><strong>Payment ID:</strong> ${order.paymentId || "--"}</div>
+    <div><strong>Transaction ID:</strong> ${order.transactionId || "--"}</div>
+    <div><strong>Status:</strong> ${order.paymentStatus || "paid"}</div>
     <div><strong>Date:</strong> ${date}</div>
     <div><strong>Total:</strong> ${formatPrice(order.amount || 0)}</div>
   `;
@@ -1056,6 +1169,156 @@ const setupBuyNow = () => {
   });
 };
 
+const buildUpiLink = ({ amount, orderId }) => {
+  const note = `${UPI_NOTE} ${orderId}`.trim();
+  const params = new URLSearchParams({
+    pa: UPI_ID,
+    pn: UPI_PAYEE_NAME,
+    am: amount.toFixed(2),
+    cu: "INR",
+    tn: note,
+  });
+  return `upi://pay?${params.toString()}`;
+};
+
+const buildQrImageUrl = (upiLink) =>
+  `https://api.qrserver.com/v1/create-qr-code/?size=240x240&data=${encodeURIComponent(upiLink)}`;
+
+const getQrElements = () => ({
+  modal: document.getElementById("qr-modal"),
+  close: document.getElementById("qr-close"),
+  image: document.getElementById("qr-image"),
+  amount: document.getElementById("qr-amount"),
+  upiText: document.getElementById("upi-id-text"),
+  copyButton: document.getElementById("copy-upi"),
+  openLink: document.getElementById("open-upi-link"),
+  transactionInput: document.getElementById("upi-transaction-id"),
+  confirmButton: document.getElementById("confirm-upi-payment"),
+});
+
+const openQrModal = (context) => {
+  const elements = getQrElements();
+  if (!elements.modal) {
+    return;
+  }
+
+  upiCheckoutContext = context;
+  const upiLink = buildUpiLink({ amount: context.total, orderId: context.orderId });
+
+  if (elements.image) {
+    elements.image.onerror = () => {
+      if (!UPI_QR_FALLBACK_IMAGE) {
+        return;
+      }
+
+      const fallbackName = UPI_QR_FALLBACK_IMAGE.split("/").pop();
+      if (elements.image.src.includes(fallbackName)) {
+        return;
+      }
+
+      elements.image.src = UPI_QR_FALLBACK_IMAGE;
+    };
+    elements.image.src = buildQrImageUrl(upiLink);
+  }
+  if (elements.amount) {
+    elements.amount.textContent = formatPrice(context.total);
+  }
+  if (elements.upiText) {
+    elements.upiText.textContent = UPI_ID;
+  }
+  if (elements.openLink) {
+    elements.openLink.href = upiLink;
+  }
+  if (elements.transactionInput) {
+    elements.transactionInput.value = "";
+  }
+
+  elements.modal.classList.add("open");
+  elements.modal.removeAttribute("aria-hidden");
+};
+
+const closeQrModal = () => {
+  const elements = getQrElements();
+  if (!elements.modal) {
+    return;
+  }
+
+  elements.modal.classList.remove("open");
+  elements.modal.setAttribute("aria-hidden", "true");
+  upiCheckoutContext = null;
+};
+
+const setupQrModal = () => {
+  const elements = getQrElements();
+  if (!elements.modal) {
+    return;
+  }
+
+  if (elements.close) {
+    elements.close.addEventListener("click", closeQrModal);
+  }
+
+  elements.modal.addEventListener("click", (event) => {
+    if (event.target === elements.modal) {
+      closeQrModal();
+    }
+  });
+
+  if (elements.copyButton) {
+    elements.copyButton.addEventListener("click", async () => {
+      try {
+        await navigator.clipboard.writeText(UPI_ID);
+        window.alert("UPI ID copied.");
+      } catch (error) {
+        window.prompt("Copy UPI ID:", UPI_ID);
+      }
+    });
+  }
+
+  if (elements.confirmButton) {
+    elements.confirmButton.addEventListener("click", () => {
+      if (!upiCheckoutContext) {
+        return;
+      }
+
+      const transactionId = elements.transactionInput?.value.trim();
+      if (!transactionId) {
+        window.alert("Please enter your transaction ID (UTR).");
+        return;
+      }
+
+      const order = buildOrderRecord({
+        orderId: upiCheckoutContext.orderId,
+        cart: upiCheckoutContext.cart,
+        subtotal: upiCheckoutContext.subtotal,
+        discount: upiCheckoutContext.discount,
+        total: upiCheckoutContext.total,
+        payment: { transactionId },
+        customer: upiCheckoutContext.details,
+        paymentMethod: "UPI QR",
+        paymentStatus: "pending",
+        transactionId,
+      });
+
+      const history = loadOrderHistory();
+      history.unshift(order);
+      saveOrderHistory(history);
+      saveLastOrder(order);
+      sendOrderEmail(order);
+      sendAdminNotification(order);
+      submitOrderToGoogleSheets(order);
+
+      saveCart([]);
+      saveCoupon(null);
+      renderCart([]);
+      updateCartBadge();
+
+      closeQrModal();
+      window.location.href = "order-success.html";
+    });
+  }
+};
+
 const setupCheckout = () => {
   const button = document.getElementById("checkout-button");
   if (!button) {
@@ -1069,6 +1332,11 @@ const setupCheckout = () => {
       return;
     }
 
+    if (UPI_ID === "yourupi@bank") {
+      window.alert("Please update the UPI ID in script.js before accepting payments.");
+      return;
+    }
+
     // Calculate totals
     const coupon = loadCoupon();
     const subtotal = calculateSubtotal(cart);
@@ -1077,67 +1345,15 @@ const setupCheckout = () => {
 
     const details = loadCheckoutDetails();
 
-    // Razorpay configuration
-    const options = {
-      key: "rzp_test_SEt9hM8Wuar2cX", // Replace with your Razorpay Key ID (use test key for testing)
-      amount: total * 100, // Amount in paise (multiply by 100)
-      currency: "INR",
-      name: "Likhith Visuals",
-      description: "Purchase of Digital Products",
-      image: "assets/logo.png",
-      handler: function (response) {
-        const order = buildOrderRecord({
-          cart,
-          subtotal,
-          discount,
-          total,
-          payment: response,
-          customer: details,
-        });
-
-        const history = loadOrderHistory();
-        history.unshift(order);
-        saveOrderHistory(history);
-        saveLastOrder(order);
-        sendOrderEmail(order);
-
-        // Clear cart after successful payment
-        saveCart([]);
-        saveCoupon(null);
-        renderCart([]);
-        updateCartBadge();
-
-        window.location.href = "order-success.html";
-      },
-      prefill: {
-        name: details.name,
-        email: details.email,
-        contact: details.phone,
-      },
-      notes: {
-        cart_items: cart.map((item) => `${item.title} (${item.qty})`).join(", "),
-      },
-      theme: {
-        color: "#000000",
-      },
-      modal: {
-        ondismiss: function () {
-          console.log("Payment cancelled by user");
-        },
-      },
-    };
-
-    // Create Razorpay instance and open checkout
-    const rzp = new Razorpay(options);
-    
-    rzp.on("payment.failed", function (response) {
-      console.error("Payment failed:", response.error);
-      window.alert(
-        `Payment Failed!\n\nReason: ${response.error.description}\n\nPlease try again or contact support.`
-      );
+    const orderId = createOrderId();
+    openQrModal({
+      orderId,
+      cart,
+      subtotal,
+      discount,
+      total,
+      details,
     });
-    
-    rzp.open();
   });
 };
 
@@ -1209,6 +1425,7 @@ document.addEventListener("DOMContentLoaded", () => {
     renderCart(cart);
     handleCartActions();
     setupCheckoutDetails();
+    setupQrModal();
     renderOrderHistory();
     setupOrderHistoryActions();
   }
