@@ -18,12 +18,21 @@ const setAdminAuth = (authenticated) => {
 
 // Login functionality
 const setupAdminLogin = () => {
+  console.log("setupAdminLogin called");
+  console.log("ADMIN_PASSWORD is defined:", typeof ADMIN_PASSWORD !== 'undefined');
+  
   const loginSection = document.getElementById("admin-login");
   const dashboard = document.getElementById("admin-dashboard");
   const form = document.getElementById("admin-login-form");
   const error = document.getElementById("admin-login-error");
 
-  if (!form) return;
+  console.log("Form element found:", !!form);
+  console.log("Error element found:", !!error);
+
+  if (!form) {
+    console.error("Login form not found!");
+    return;
+  }
 
   // Check if already authenticated
   if (checkAdminAuth()) {
@@ -35,20 +44,31 @@ const setupAdminLogin = () => {
   }
 
   form.addEventListener("submit", (e) => {
+    console.log("Form submit event fired!");
     e.preventDefault();
     const password = document.getElementById("admin-password").value;
 
+    console.log("Login attempt with password:", password);
+    console.log("Expected password:", ADMIN_PASSWORD);
+    console.log("Match:", password === ADMIN_PASSWORD);
+
     if (password === ADMIN_PASSWORD) {
+      console.log("Password correct, logging in...");
       setAdminAuth(true);
       loginSection.style.display = "none";
       dashboard.style.display = "block";
       error.textContent = "";
       loadAdminData();
     } else {
-      error.textContent = "Incorrect password";
+      console.log("Password incorrect, showing error");
+      error.textContent = "Incorrect password. Please try again.";
       error.style.color = "#d93025";
+      error.style.display = "block";
+      console.log("Login failed");
     }
   });
+  
+  console.log("Form submit listener attached");
 };
 
 // Logout functionality
@@ -219,7 +239,7 @@ const setupOrderActions = () => {
 };
 
 // Product Management
-const PRODUCTS_STORAGE_KEY = "admin-products";
+// PRODUCTS_STORAGE_KEY is already declared in script.js
 
 const loadProducts = () => {
   const stored = localStorage.getItem(PRODUCTS_STORAGE_KEY);
@@ -405,10 +425,15 @@ const setupProductActions = () => {
 
 // Initialize admin panel
 document.addEventListener("DOMContentLoaded", () => {
+  console.log("DOMContentLoaded fired");
+  console.log("Page type:", document.body.dataset.page);
+  
   if (document.body.dataset.page !== "admin") {
+    console.log("Not admin page, exiting");
     return;
   }
 
+  console.log("Initializing admin panel");
   setupAdminLogin();
   setupAdminLogout();
   setupAdminTabs();

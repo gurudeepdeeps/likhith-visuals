@@ -4,20 +4,21 @@ const COUPON_KEY = "faxpc-coupon";
 const ORDER_HISTORY_KEY = "faxpc-order-history";
 const LAST_ORDER_KEY = "faxpc-last-order";
 const CHECKOUT_DETAILS_KEY = "faxpc-checkout-details";
+const PRODUCTS_STORAGE_KEY = "admin-products";
 
 const EMAILJS_PUBLIC_KEY = "B7zVzclIjXPJJ6C0D";
 const EMAILJS_SERVICE_ID = "service_5bgbrab";
 const EMAILJS_TEMPLATE_ID = "template_vqs92b6";
 const EMAILJS_ADMIN_TEMPLATE_ID = "template_admin_notify";
 
-const GOOGLE_SHEETS_API_KEY = "AIzaSyCds-5egUXoYvVzbcHQJzUEm2_X8QZUwQo";
-const GOOGLE_SHEETS_SPREADSHEET_ID = "1SAbW4HGsCBFGfFJHvtDXXN9yDo1Y59Il3SOO_8zd878";
-const GOOGLE_SHEETS_RANGE = "Orders!A:K";
-
 const ADMIN_EMAIL = "likhithlikhith278@gmail.com";
-const ADMIN_PASSWORD = "Likhith@14";
+const ADMIN_PASSWORD = "Admin@123";
 
-const UPI_ID = "8310577983-4@ybl";
+// Telegram Bot Configuration
+const TELEGRAM_BOT_TOKEN = "7959976246:AAHrcb6u2_4C_b_CsOubdfpDP23DH1gC7Ks"; // Get from @BotFather
+const TELEGRAM_CHAT_ID = "8049155427"; // Get from @userinfobot
+
+const UPI_ID = "8310577583-4@ybl";
 const UPI_PAYEE_NAME = "LIKHITH D A";
 const UPI_NOTE = "Order payment";
 const UPI_QR_FALLBACK_IMAGE = "assets/qr-code.png";
@@ -253,8 +254,26 @@ const normalizeImagePath = (path) => {
   return normalized;
 };
 
-const getProductById = (id) =>
-  productCatalog.find((item) => item.id === id) || productCatalog[0];
+const loadStoredProducts = () => {
+  const raw = localStorage.getItem(PRODUCTS_STORAGE_KEY);
+  if (!raw) {
+    return null;
+  }
+
+  try {
+    const parsed = JSON.parse(raw);
+    return Array.isArray(parsed) && parsed.length > 0 ? parsed : null;
+  } catch (error) {
+    return null;
+  }
+};
+
+const getActiveProductCatalog = () => loadStoredProducts() || productCatalog;
+
+const getProductById = (id) => {
+  const catalog = getActiveProductCatalog();
+  return catalog.find((item) => item.id === id) || catalog[0];
+};
 
 const loadCart = () => {
   const raw = localStorage.getItem(STORAGE_KEY);
@@ -433,56 +452,62 @@ const sendAdminNotification = (order) => {
     });
 };
 
-const isGoogleSheetsConfigured = () => {
-  return (
-    GOOGLE_SHEETS_API_KEY &&
-    !GOOGLE_SHEETS_API_KEY.startsWith("YOUR_") &&
-    GOOGLE_SHEETS_SPREADSHEET_ID &&
-    !GOOGLE_SHEETS_SPREADSHEET_ID.startsWith("YOUR_")
-  );
-};
-
-const submitOrderToGoogleSheets = async (order) => {
-  if (!isGoogleSheetsConfigured()) {
-    console.warn("Google Sheets not configured");
-    return;
+const sendTelegramNotification = async (order) => {
+  if (!TELEGRAM_BOT_TOKEN || TELEGRAM_BOT_TOKEN.startsWith("YOUR_") || 
+      !TELEGRAM_CHAT_ID || TELEGRAM_CHAT_ID.startsWith("YOUR_")) {
+    console.log("Telegram not configured, skipping notification");
+    return false;
   }
 
-  try {
-    const row = [
-      order.id,
-      new Date(order.createdAt).toLocaleString(),
-      order.customer.name || "",
-      order.customer.email || "",
-      order.customer.phone || "",
-      order.transactionId || "",
-      order.amount,
-      order.paymentStatus || "pending",
-      order.paymentMethod || "UPI QR",
-      (order.items || []).map((item) => `${item.title} x${item.qty}`).join(", "),
-      order.discount || 0,
-    ];
+  const itemsList = (order.items || [])
+    .map((item) => `  ${item.title} x${item.qty} - Rs. ${item.price}`)
+    .join('\n');
 
+  // Plain text message without Markdown to avoid parsing errors
+  const message = `🆕 NEW ORDER RECEIVED
+
+📦 Order ID: ${order.id}
+💳 UTR Number: ${order.transactionId || 'Pending'}
+
+👤 Customer Details:
+  Name: ${order.customer.name}
+  Email: ${order.customer.email}
+  Phone: ${order.customer.phone}
+
+🛍️ Order Items:
+${itemsList}
+
+💰 Total Amount: Rs. ${order.amount}
+📋 Status: ${order.paymentStatus || 'pending'}
+💳 Method: ${order.paymentMethod || 'UPI QR'}
+📅 Date: ${new Date(order.createdAt).toLocaleString('en-IN')}
+
+✅ Check admin panel for more details!`;
+
+  try {
     const response = await fetch(
-      `https://sheets.googleapis.com/v4/spreadsheets/${GOOGLE_SHEETS_SPREADSHEET_ID}/values/${GOOGLE_SHEETS_RANGE}:append?valueInputOption=RAW&key=${GOOGLE_SHEETS_API_KEY}`,
+      `https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage`,
       {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          values: [row],
-        }),
+          chat_id: TELEGRAM_CHAT_ID,
+          text: message
+        })
       }
     );
 
-    if (!response.ok) {
-      throw new Error(`Google Sheets API error: ${response.status}`);
+    if (response.ok) {
+      console.log("Telegram notification sent successfully");
+      return true;
+    } else {
+      const errorText = await response.text();
+      console.error("Telegram notification failed:", errorText);
+      return false;
     }
-
-    console.log("Order submitted to Google Sheets");
   } catch (error) {
-    console.error("Failed to submit to Google Sheets:", error);
+    console.error("Telegram notification error:", error);
+    return false;
   }
 };
 
@@ -1021,7 +1046,9 @@ const renderHomeProducts = () => {
 
   grid.innerHTML = "";
 
-  productCatalog.forEach((product, index) => {
+  const catalog = getActiveProductCatalog();
+
+  catalog.forEach((product, index) => {
     const card = document.createElement("article");
     card.className = "product-card";
 
@@ -1276,45 +1303,50 @@ const setupQrModal = () => {
   }
 
   if (elements.confirmButton) {
-    elements.confirmButton.addEventListener("click", () => {
-      if (!upiCheckoutContext) {
-        return;
+    elements.confirmButton.addEventListener("click", async () => {
+      try {
+        if (!upiCheckoutContext) {
+          return;
+        }
+
+        const transactionId = elements.transactionInput?.value.trim();
+        if (!transactionId) {
+          window.alert("Please enter your transaction ID (UTR).");
+          return;
+        }
+
+        const order = buildOrderRecord({
+          orderId: upiCheckoutContext.orderId,
+          cart: upiCheckoutContext.cart,
+          subtotal: upiCheckoutContext.subtotal,
+          discount: upiCheckoutContext.discount,
+          total: upiCheckoutContext.total,
+          payment: { transactionId },
+          customer: upiCheckoutContext.details,
+          paymentMethod: "UPI QR",
+          paymentStatus: "pending",
+          transactionId,
+        });
+
+        const history = loadOrderHistory();
+        history.unshift(order);
+        saveOrderHistory(history);
+        saveLastOrder(order);
+        sendOrderEmail(order);
+        sendAdminNotification(order);
+        await sendTelegramNotification(order);
+
+        saveCart([]);
+        saveCoupon(null);
+        renderCart([]);
+        updateCartBadge();
+
+        closeQrModal();
+        window.location.href = "order-success.html";
+      } catch (error) {
+        console.error("UPI checkout error:", error);
+        window.alert("Checkout failed. Please try again.");
       }
-
-      const transactionId = elements.transactionInput?.value.trim();
-      if (!transactionId) {
-        window.alert("Please enter your transaction ID (UTR).");
-        return;
-      }
-
-      const order = buildOrderRecord({
-        orderId: upiCheckoutContext.orderId,
-        cart: upiCheckoutContext.cart,
-        subtotal: upiCheckoutContext.subtotal,
-        discount: upiCheckoutContext.discount,
-        total: upiCheckoutContext.total,
-        payment: { transactionId },
-        customer: upiCheckoutContext.details,
-        paymentMethod: "UPI QR",
-        paymentStatus: "pending",
-        transactionId,
-      });
-
-      const history = loadOrderHistory();
-      history.unshift(order);
-      saveOrderHistory(history);
-      saveLastOrder(order);
-      sendOrderEmail(order);
-      sendAdminNotification(order);
-      submitOrderToGoogleSheets(order);
-
-      saveCart([]);
-      saveCoupon(null);
-      renderCart([]);
-      updateCartBadge();
-
-      closeQrModal();
-      window.location.href = "order-success.html";
     });
   }
 };
