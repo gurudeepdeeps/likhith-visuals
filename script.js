@@ -14,6 +14,21 @@ const EMAILJS_ADMIN_TEMPLATE_ID = "template_admin_notify";
 const ADMIN_EMAIL = "likhithlikhith278@gmail.com";
 const ADMIN_PASSWORD = "Admin@123";
 
+// Razorpay Configuration
+const RAZORPAY_KEY_ID = "rzp_live_SFYqqjGhiIoOeV";
+const RAZORPAY_ORDER_ENDPOINT = "/.netlify/functions/create-razorpay-order";
+
+// Supabase Configuration
+const SUPABASE_URL = "https://ulzixsrxslzniivfaqih.supabase.co";
+const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InVseml4c3J4c2x6bmlpdmZhcWloIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzA5MTg1ODQsImV4cCI6MjA4NjQ5NDU4NH0.8MmrlgELmGZpObVgc9E3voZKjHOHvPm9J9_Z7meaukM";
+
+// Initialize Supabase client
+let supabaseClient = null;
+if (typeof window.supabase !== 'undefined') {
+  supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+  console.log("Supabase initialized successfully");
+}
+
 // Telegram Bot Configuration
 const TELEGRAM_BOT_TOKEN = "7959976246:AAHrcb6u2_4C_b_CsOubdfpDP23DH1gC7Ks"; // Get from @BotFather
 const TELEGRAM_CHAT_ID = "8049155427"; // Get from @userinfobot
@@ -350,6 +365,21 @@ const saveLastOrder = (order) => {
   localStorage.setItem(LAST_ORDER_KEY, JSON.stringify(order));
 };
 
+const cleanupLocalOrderHistoryOnce = () => {
+  const cleanedKey = "supabase-orders-cleaned";
+  if (localStorage.getItem(cleanedKey) === "true") {
+    return;
+  }
+
+  if (!supabaseClient) {
+    return;
+  }
+
+  localStorage.removeItem(ORDER_HISTORY_KEY);
+  localStorage.removeItem(LAST_ORDER_KEY);
+  localStorage.setItem(cleanedKey, "true");
+};
+
 const loadCheckoutDetails = () => {
   const raw = localStorage.getItem(CHECKOUT_DETAILS_KEY);
   if (!raw) {
@@ -507,6 +537,289 @@ ${itemsList}
     }
   } catch (error) {
     console.error("Telegram notification error:", error);
+    return false;
+  }
+};
+
+// Supabase Database Functions
+const saveOrderToSupabase = async (order) => {
+  if (!supabaseClient) {
+    console.warn("Supabase not initialized");
+    return false;
+  }
+
+  try {
+    const { data, error } = await supabaseClient
+      .from('orders')
+      .insert({
+        id: order.id,
+        customer_name: order.customer.name || "",
+        customer_email: order.customer.email || "",
+        customer_phone: order.customer.phone || "",
+        transaction_id: order.transactionId || "",
+        items: order.items || [],
+        total_amount: order.amount,
+        discount: order.discount || 0,
+        payment_status: order.paymentStatus || "pending",
+        payment_method: order.paymentMethod || "UPI QR",
+        created_at: order.createdAt
+      });
+
+    if (error) {
+      console.error("Supabase order save error:", error);
+      return false;
+    }
+
+    console.log("Order saved to Supabase successfully");
+    return true;
+  } catch (error) {
+    console.error("Failed to save order to Supabase:", error);
+    return false;
+  }
+};
+
+const loadOrdersFromSupabase = async () => {
+  if (!supabaseClient) {
+    console.warn("Supabase not initialized, using localStorage");
+    return loadOrderHistory();
+  }
+
+  try {
+    const { data, error } = await supabaseClient
+      .from('orders')
+      .select('*')
+      .order('created_at', { ascending: false });
+
+    if (error) {
+      console.error("Supabase orders load error:", error);
+      return loadOrderHistory();
+    }
+
+    // Transform Supabase data to match our order format
+    const orders = data.map(row => ({
+      id: row.id,
+      customer: {
+        name: row.customer_name,
+        email: row.customer_email,
+        phone: row.customer_phone
+      },
+      transactionId: row.transaction_id,
+      items: row.items,
+      amount: parseFloat(row.total_amount),
+      discount: parseFloat(row.discount || 0),
+      paymentStatus: row.payment_status,
+      paymentMethod: row.payment_method,
+      createdAt: row.created_at
+    }));
+
+    console.log(`Loaded ${orders.length} orders from Supabase`);
+    return orders;
+  } catch (error) {
+    console.error("Failed to load orders from Supabase:", error);
+    return loadOrderHistory();
+  }
+};
+
+const saveProductToSupabase = async (product) => {
+  if (!supabaseClient) {
+    console.warn("Supabase not initialized");
+    return false;
+  }
+
+  try {
+    const { data, error } = await supabaseClient
+      .from('products')
+      .upsert({
+        id: product.id,
+        title: product.title,
+        price: product.price,
+        image: product.image || "",
+        tag: product.tag || "",
+        rating: product.rating || 0,
+        features: product.features || [],
+        is_active: true
+      });
+
+    if (error) {
+      console.error("Supabase product save error:", error);
+      return false;
+    }
+
+    console.log("Product saved to Supabase successfully");
+    return true;
+  } catch (error) {
+    console.error("Failed to save product to Supabase:", error);
+    return false;
+  }
+};
+
+const uploadProductImageToSupabase = async (file) => {
+  if (!supabaseClient) {
+    console.warn("Supabase not initialized");
+    return null;
+  }
+
+  if (!file) {
+    return null;
+  }
+
+  const extension = file.name.includes(".") ? file.name.split(".").pop() : "png";
+  const fileName = `product-${Date.now()}-${Math.random().toString(36).slice(2)}.${extension}`;
+
+  try {
+    const { error } = await supabaseClient
+      .storage
+      .from("product-images")
+      .upload(fileName, file, { upsert: true });
+
+    if (error) {
+      console.error("Supabase image upload error:", error);
+      return null;
+    }
+
+    const { data } = supabaseClient
+      .storage
+      .from("product-images")
+      .getPublicUrl(fileName);
+
+    return data?.publicUrl || null;
+  } catch (error) {
+    console.error("Failed to upload image to Supabase:", error);
+    return null;
+  }
+};
+
+const loadProductsFromSupabase = async () => {
+  if (!supabaseClient) {
+    console.warn("Supabase not initialized, using default catalog");
+    return getActiveProductCatalog();
+  }
+
+  try {
+    const { data, error } = await supabaseClient
+      .from('products')
+      .select('*')
+      .eq('is_active', true)
+      .order('title', { ascending: true });
+
+    if (error) {
+      console.error("Supabase products load error:", error);
+      return getActiveProductCatalog();
+    }
+
+    if (data && data.length > 0) {
+      console.log(`Loaded ${data.length} products from Supabase`);
+      return data;
+    }
+
+    // If no products in Supabase, return default catalog
+    return getActiveProductCatalog();
+  } catch (error) {
+    console.error("Failed to load products from Supabase:", error);
+    return getActiveProductCatalog();
+  }
+};
+
+const seedProductsToSupabaseOnce = async () => {
+  const seededKey = "supabase-products-seeded";
+  if (localStorage.getItem(seededKey) === "true") {
+    return;
+  }
+
+  if (!supabaseClient) {
+    return;
+  }
+
+  try {
+    const { count, error } = await supabaseClient
+      .from("products")
+      .select("id", { count: "exact", head: true });
+
+    if (error) {
+      console.error("Supabase products count error:", error);
+      return;
+    }
+
+    if (Number(count) > 0) {
+      localStorage.setItem(seededKey, "true");
+      return;
+    }
+
+    const rows = productCatalog.map((product) => ({
+      id: product.id,
+      title: product.title,
+      price: product.price,
+      image: product.image || "",
+      tag: product.tag || "",
+      rating: product.rating || 0,
+      features: product.features || [],
+      is_active: true,
+    }));
+
+    const { error: insertError } = await supabaseClient
+      .from("products")
+      .insert(rows);
+
+    if (insertError) {
+      console.error("Supabase products seed error:", insertError);
+      return;
+    }
+
+    console.log("Seeded Supabase products successfully");
+    localStorage.setItem(seededKey, "true");
+  } catch (error) {
+    console.error("Failed to seed Supabase products:", error);
+  }
+};
+
+const normalizeSupabaseProduct = (product) => ({
+  id: product.id,
+  title: product.title,
+  price: Number(product.price) || 0,
+  oldPrice: Number(product.oldPrice || product.price) || 0,
+  tag: product.tag || "",
+  image: product.image || "",
+  rating: Number(product.rating) || 0,
+  description: product.description || "",
+  features: Array.isArray(product.features) ? product.features : [],
+});
+
+const syncProductsFromSupabase = async () => {
+  if (!supabaseClient) {
+    return false;
+  }
+
+  const products = await loadProductsFromSupabase();
+  if (!Array.isArray(products) || products.length === 0) {
+    return false;
+  }
+
+  const normalized = products.map(normalizeSupabaseProduct);
+  localStorage.setItem(PRODUCTS_STORAGE_KEY, JSON.stringify(normalized));
+  return true;
+};
+
+const deleteProductFromSupabase = async (productId) => {
+  if (!supabaseClient) {
+    console.warn("Supabase not initialized");
+    return false;
+  }
+
+  try {
+    const { error } = await supabaseClient
+      .from('products')
+      .update({ is_active: false })
+      .eq('id', productId);
+
+    if (error) {
+      console.error("Supabase product delete error:", error);
+      return false;
+    }
+
+    console.log("Product deleted from Supabase successfully");
+    return true;
+  } catch (error) {
+    console.error("Failed to delete product from Supabase:", error);
     return false;
   }
 };
@@ -943,10 +1256,12 @@ const setupProductLinks = () => {
   });
 };
 
-const setupProductDetailsPage = () => {
+const setupProductDetailsPage = async () => {
   if (document.body.dataset.page !== "product") {
     return;
   }
+
+  await syncProductsFromSupabase();
 
   const params = new URLSearchParams(window.location.search);
   const id = params.get("id");
@@ -1015,10 +1330,12 @@ const setupProductDetailsPage = () => {
   document.title = `${product.title} - Likhith Visuals`;
 };
 
-const renderHomeProducts = () => {
+const renderHomeProducts = async () => {
   if (document.body.dataset.page !== "home") {
     return;
   }
+
+  await syncProductsFromSupabase();
 
   const grid = document.getElementById("product-grid") || document.querySelector(".product-grid");
   if (!grid) {
@@ -1332,6 +1649,13 @@ const setupQrModal = () => {
         history.unshift(order);
         saveOrderHistory(history);
         saveLastOrder(order);
+        
+        // Save to Supabase (cloud database)
+        const supabaseOk = await saveOrderToSupabase(order);
+        if (!supabaseOk) {
+          window.alert("Order saved locally, but Supabase did not update. Please try again.");
+        }
+        
         sendOrderEmail(order);
         sendAdminNotification(order);
         await sendTelegramNotification(order);
@@ -1357,15 +1681,16 @@ const setupCheckout = () => {
     return;
   }
 
-  button.addEventListener("click", () => {
+  button.addEventListener("click", async () => {
     const cart = loadCart() || [];
     if (cart.length === 0) {
       window.alert("Your cart is empty.");
       return;
     }
 
-    if (UPI_ID === "yourupi@bank") {
-      window.alert("Please update the UPI ID in script.js before accepting payments.");
+    const details = loadCheckoutDetails();
+    if (!details.name || !details.email || !details.phone) {
+      window.alert("Please fill in all checkout details.");
       return;
     }
 
@@ -1374,18 +1699,96 @@ const setupCheckout = () => {
     const subtotal = calculateSubtotal(cart);
     const discount = calculateDiscount(subtotal, coupon);
     const total = subtotal - discount;
-
-    const details = loadCheckoutDetails();
+    const amountInPaise = Math.round(total * 100);
 
     const orderId = createOrderId();
-    openQrModal({
-      orderId,
-      cart,
-      subtotal,
-      discount,
-      total,
-      details,
-    });
+
+    try {
+      // Create Razorpay order via Netlify function
+      const response = await fetch(RAZORPAY_ORDER_ENDPOINT, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          amount: amountInPaise,
+          currency: "INR",
+          receipt: orderId,
+        }),
+      });
+
+      if (!response.ok) {
+        throw new Error("Failed to create Razorpay order");
+      }
+
+      const { id: razorpayOrderId } = await response.json();
+
+      // Open Razorpay Checkout
+      const options = {
+        key: RAZORPAY_KEY_ID,
+        amount: amountInPaise,
+        currency: "INR",
+        name: "Likhith Visuals",
+        description: `Order ${orderId}`,
+        order_id: razorpayOrderId,
+        prefill: {
+          name: details.name,
+          email: details.email,
+          contact: details.phone,
+        },
+        theme: {
+          color: "#000000",
+        },
+        handler: async function (response) {
+          // Payment successful
+          const order = createOrder({
+            id: orderId,
+            items: cart,
+            amount: total,
+            subtotal,
+            discount,
+            total,
+            payment: {
+              razorpay_order_id: response.razorpay_order_id,
+              razorpay_payment_id: response.razorpay_payment_id,
+              razorpay_signature: response.razorpay_signature,
+            },
+            customer: details,
+            paymentMethod: "Razorpay",
+            paymentStatus: "paid",
+            transactionId: response.razorpay_payment_id,
+          });
+
+          const history = loadOrderHistory();
+          history.unshift(order);
+          saveOrderHistory(history);
+          saveLastOrder(order);
+
+          // Save to Supabase
+          await saveOrderToSupabase(order);
+
+          sendOrderEmail(order);
+          sendAdminNotification(order);
+          await sendTelegramNotification(order);
+
+          saveCart([]);
+          saveCoupon(null);
+          renderCart([]);
+          updateCartBadge();
+
+          window.location.href = "order-success.html";
+        },
+        modal: {
+          ondismiss: function () {
+            console.log("Razorpay checkout dismissed");
+          },
+        },
+      };
+
+      const rzp = new window.Razorpay(options);
+      rzp.open();
+    } catch (error) {
+      console.error("Razorpay checkout error:", error);
+      window.alert("Failed to initiate payment. Please try again.");
+    }
   });
 };
 
@@ -1448,16 +1851,18 @@ const setupCoupon = () => {
   }
 };
 
-document.addEventListener("DOMContentLoaded", () => {
+document.addEventListener("DOMContentLoaded", async () => {
   updateCartBadge();
   initEmailJs();
+
+  cleanupLocalOrderHistoryOnce();
 
   if (document.body.dataset.page === "cart") {
     const cart = ensureSeededCart();
     renderCart(cart);
     handleCartActions();
     setupCheckoutDetails();
-    setupQrModal();
+    // UPI QR checkout is temporarily hidden
     renderOrderHistory();
     setupOrderHistoryActions();
   }
@@ -1466,7 +1871,9 @@ document.addEventListener("DOMContentLoaded", () => {
     renderOrderSuccess();
   }
 
-  renderHomeProducts();
+  await seedProductsToSupabaseOnce();
+  await syncProductsFromSupabase();
+  await renderHomeProducts();
   setupAddToCart();
   setupSort();
   setupBuyNow();
@@ -1474,6 +1881,6 @@ document.addEventListener("DOMContentLoaded", () => {
   updateProductCount();
   setupProductImages();
   setupProductLinks();
-  setupProductDetailsPage();
+  await setupProductDetailsPage();
   setupCoupon();
 });

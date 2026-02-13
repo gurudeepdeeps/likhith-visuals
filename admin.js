@@ -107,18 +107,19 @@ const setupAdminTabs = () => {
 };
 
 // Load admin data
-const loadAdminData = () => {
-  renderOrders();
-  renderProducts();
-  updateStats();
+const loadAdminData = async () => {
+  await renderOrders();
+  await renderProducts();
+  await updateStats();
 };
 
 // Render orders table
-const renderOrders = () => {
+const renderOrders = async () => {
   const tbody = document.getElementById("orders-table-body");
   if (!tbody) return;
 
-  const orders = loadOrderHistory();
+  // Load from Supabase (fallback to localStorage if unavailable)
+  const orders = await loadOrdersFromSupabase();
   tbody.innerHTML = "";
 
   if (orders.length === 0) {
@@ -152,8 +153,8 @@ const renderOrders = () => {
 };
 
 // Update statistics
-const updateStats = () => {
-  const orders = loadOrderHistory();
+const updateStats = async () => {
+  const orders = await loadOrdersFromSupabase();
   const totalOrders = orders.length;
   const pendingOrders = orders.filter((o) => o.paymentStatus === "pending").length;
   const totalRevenue = orders.reduce((sum, o) => sum + (o.amount || 0), 0);
@@ -168,8 +169,8 @@ const updateStats = () => {
 };
 
 // Export orders as CSV
-const exportOrdersCSV = () => {
-  const orders = loadOrderHistory();
+const exportOrdersCSV = async () => {
+  const orders = await loadOrdersFromSupabase();
   if (orders.length === 0) {
     alert("No orders to export");
     return;
@@ -227,9 +228,9 @@ const setupOrderActions = () => {
   const exportBtn = document.getElementById("export-orders");
 
   if (refreshBtn) {
-    refreshBtn.addEventListener("click", () => {
-      renderOrders();
-      updateStats();
+    refreshBtn.addEventListener("click", async () => {
+      await renderOrders();
+      await updateStats();
     });
   }
 
@@ -257,11 +258,11 @@ const saveProducts = (products) => {
   localStorage.setItem(PRODUCTS_STORAGE_KEY, JSON.stringify(products));
 };
 
-const renderProducts = () => {
+const renderProducts = async () => {
   const grid = document.getElementById("products-grid");
   if (!grid) return;
 
-  const products = loadProducts();
+  const products = await loadProductsFromSupabase();
   grid.innerHTML = "";
 
   products.forEach((product) => {
@@ -275,7 +276,7 @@ const renderProducts = () => {
         <h3>${product.title}</h3>
         <div class="admin-product-meta">
           <span>ID: ${product.id}</span>
-          <span>${formatPrice(product.price)} (was ${formatPrice(product.oldPrice)})</span>
+          <span>${formatPrice(product.price)} (was ${formatPrice(product.oldPrice || product.price)})</span>
           <span>Tag: ${product.tag}</span>
           <span>Rating: ${product.rating}</span>
         </div>
@@ -292,7 +293,7 @@ const renderProducts = () => {
 };
 
 // Product modal
-const openProductModal = (productId = null) => {
+const openProductModal = async (productId = null) => {
   const modal = document.getElementById("product-modal");
   const title = document.getElementById("product-modal-title");
   const form = document.getElementById("product-form");
@@ -301,7 +302,7 @@ const openProductModal = (productId = null) => {
   form.reset();
 
   if (productId) {
-    const products = loadProducts();
+    const products = await loadProductsFromSupabase();
     const product = products.find((p) => p.id === productId);
     if (!product) return;
 
@@ -338,6 +339,9 @@ const setupProductModal = () => {
   const closeBtn = document.getElementById("product-modal-close");
   const cancelBtn = document.getElementById("product-form-cancel");
   const form = document.getElementById("product-form");
+  const imageFileInput = document.getElementById("product-image-file");
+  const imageStatus = document.getElementById("product-image-status");
+  const imageUploadBtn = document.getElementById("product-image-upload-btn");
 
   if (addBtn) {
     addBtn.addEventListener("click", () => openProductModal());
@@ -357,11 +361,59 @@ const setupProductModal = () => {
       saveProductFromForm();
     });
   }
+
+  if (imageUploadBtn && imageFileInput) {
+    imageUploadBtn.addEventListener("click", () => {
+      imageFileInput.click();
+    });
+  }
+
+  if (imageFileInput) {
+    imageFileInput.addEventListener("change", async () => {
+      const file = imageFileInput.files?.[0];
+      if (!file) {
+        return;
+      }
+
+      if (imageStatus) {
+        imageStatus.textContent = "Uploading image...";
+      }
+
+      const url = await uploadProductImageToSupabase(file);
+      if (url) {
+        const imageInput = document.getElementById("product-image");
+        if (imageInput) {
+          imageInput.value = url;
+        }
+        if (imageStatus) {
+          imageStatus.textContent = "Upload complete. Image URL updated.";
+        }
+        imageFileInput.value = "";
+      } else if (imageStatus) {
+        imageStatus.textContent = "Upload failed. Please try again.";
+      }
+    });
+  }
 };
 
-const saveProductFromForm = () => {
+const saveProductFromForm = async () => {
   const editId = document.getElementById("product-edit-id").value;
-  const products = loadProducts();
+  const products = await loadProductsFromSupabase();
+
+  const imageFileInput = document.getElementById("product-image-file");
+  let imageUrl = document.getElementById("product-image").value.trim();
+  const file = imageFileInput?.files?.[0];
+
+  if (!imageUrl && file) {
+    const uploadedUrl = await uploadProductImageToSupabase(file);
+    if (uploadedUrl) {
+      imageUrl = uploadedUrl;
+      const imageInput = document.getElementById("product-image");
+      if (imageInput) {
+        imageInput.value = uploadedUrl;
+      }
+    }
+  }
 
   const product = {
     id: document.getElementById("product-id").value.trim(),
@@ -370,7 +422,7 @@ const saveProductFromForm = () => {
     oldPrice: Number(document.getElementById("product-old-price").value) || 0,
     tag: document.getElementById("product-tag").value.trim(),
     rating: Number(document.getElementById("product-rating").value) || 5,
-    image: document.getElementById("product-image").value.trim(),
+    image: imageUrl,
     description: document.getElementById("product-description").value.trim(),
     features: document
       .getElementById("product-features")
@@ -379,48 +431,72 @@ const saveProductFromForm = () => {
       .filter((f) => f),
   };
 
-  if (editId) {
-    const index = products.findIndex((p) => p.id === editId);
-    if (index !== -1) {
-      products[index] = product;
-    }
-  } else {
-    if (products.find((p) => p.id === product.id)) {
-      alert("Product ID already exists");
-      return;
-    }
-    products.push(product);
+  if (!editId && products.find((p) => p.id === product.id)) {
+    alert("Product ID already exists");
+    return;
   }
 
-  saveProducts(products);
-  renderProducts();
-  closeProductModal();
-  alert("Product saved successfully");
+  // Save to Supabase
+  const success = await saveProductToSupabase(product);
+  
+  if (success) {
+    // Also save to localStorage as backup
+    if (editId) {
+      const index = products.findIndex((p) => p.id === editId);
+      if (index !== -1) {
+        products[index] = product;
+      }
+    } else {
+      products.push(product);
+    }
+    saveProducts(products);
+    
+    await renderProducts();
+    closeProductModal();
+    alert("Product saved successfully");
+  } else {
+    alert("Failed to save product. Please try again.");
+  }
 };
 
 const setupProductActions = () => {
-  const editBtns = document.querySelectorAll(".edit-product");
-  const deleteBtns = document.querySelectorAll(".delete-product");
+  const grid = document.getElementById("products-grid");
+  if (!grid) {
+    return;
+  }
 
-  editBtns.forEach((btn) => {
-    btn.addEventListener("click", () => {
-      const productId = btn.dataset.id;
-      openProductModal(productId);
-    });
-  });
+  grid.onclick = async (event) => {
+    const target = event.target;
+    if (!target) {
+      return;
+    }
 
-  deleteBtns.forEach((btn) => {
-    btn.addEventListener("click", () => {
-      const productId = btn.dataset.id;
-      if (confirm("Are you sure you want to delete this product?")) {
-        const products = loadProducts();
-        const filtered = products.filter((p) => p.id !== productId);
-        saveProducts(filtered);
-        renderProducts();
-        alert("Product deleted");
+    if (target.classList.contains("edit-product")) {
+      const productId = target.dataset.id;
+      await openProductModal(productId);
+      return;
+    }
+
+    if (target.classList.contains("delete-product")) {
+      const productId = target.dataset.id;
+      if (!productId) {
+        return;
       }
-    });
-  });
+
+      if (confirm("Are you sure you want to delete this product?")) {
+        const success = await deleteProductFromSupabase(productId);
+        if (success) {
+          const products = loadProducts();
+          const filtered = products.filter((p) => p.id !== productId);
+          saveProducts(filtered);
+          await renderProducts();
+          alert("Product deleted");
+        } else {
+          alert("Failed to delete product. Please try again.");
+        }
+      }
+    }
+  };
 };
 
 // Initialize admin panel

@@ -149,6 +149,13 @@
           <label class="detail-field">
             <span>Image URL</span>
             <input id="product-image" type="text" placeholder="assets/p1.jpg" required />
+            <button class="button ghost" type="button" id="product-image-upload-btn">Upload Image</button>
+          </label>
+
+          <label class="detail-field">
+            <span>Upload Image (Supabase)</span>
+            <input id="product-image-file" type="file" accept="image/*" />
+            <small id="product-image-status">Upload a file to auto-fill the Image URL.</small>
           </label>
 
           <label class="detail-field">
@@ -169,6 +176,7 @@
       </div>
     </div>
 
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <script src="script.js"></script>
     <script src="admin.js"></script>
   </body>

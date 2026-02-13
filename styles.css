@@ -1447,6 +1447,8 @@ a {
 
 .product-modal-card {
   max-width: 600px;
+  max-height: calc(100vh - 48px);
+  overflow-y: auto;
 }
 
 .product-form {
