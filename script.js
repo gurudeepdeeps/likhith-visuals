@@ -549,6 +549,11 @@ const saveOrderToSupabase = async (order) => {
   }
 
   try {
+    // Extract Razorpay payment details if available
+    const razorpayOrderId = order.payment?.razorpay_order_id || null;
+    const razorpayPaymentId = order.payment?.razorpay_payment_id || null;
+    const razorpaySignature = order.payment?.razorpay_signature || null;
+
     const { data, error } = await supabaseClient
       .from('orders')
       .insert({
@@ -556,12 +561,15 @@ const saveOrderToSupabase = async (order) => {
         customer_name: order.customer.name || "",
         customer_email: order.customer.email || "",
         customer_phone: order.customer.phone || "",
-        transaction_id: order.transactionId || "",
+        transaction_id: order.transactionId || razorpayPaymentId || "",
         items: order.items || [],
         total_amount: order.amount,
         discount: order.discount || 0,
         payment_status: order.paymentStatus || "pending",
-        payment_method: order.paymentMethod || "UPI QR",
+        payment_method: order.paymentMethod || "Razorpay",
+        razorpay_order_id: razorpayOrderId,
+        razorpay_payment_id: razorpayPaymentId,
+        razorpay_signature: razorpaySignature,
         created_at: order.createdAt
       });
 
@@ -603,12 +611,17 @@ const loadOrdersFromSupabase = async () => {
         email: row.customer_email,
         phone: row.customer_phone
       },
-      transactionId: row.transaction_id,
+      transactionId: row.transaction_id || row.razorpay_payment_id,
       items: row.items,
       amount: parseFloat(row.total_amount),
       discount: parseFloat(row.discount || 0),
       paymentStatus: row.payment_status,
       paymentMethod: row.payment_method,
+      payment: {
+        razorpay_order_id: row.razorpay_order_id,
+        razorpay_payment_id: row.razorpay_payment_id,
+        razorpay_signature: row.razorpay_signature
+      },
       createdAt: row.created_at
     }));
 
@@ -633,6 +646,7 @@ const saveProductToSupabase = async (product) => {
         id: product.id,
         title: product.title,
         price: product.price,
+        old_price: product.oldPrice || null,
         image: product.image || "",
         tag: product.tag || "",
         rating: product.rating || 0,
@@ -709,7 +723,11 @@ const loadProductsFromSupabase = async () => {
 
     if (data && data.length > 0) {
       console.log(`Loaded ${data.length} products from Supabase`);
-      return data;
+      // Map snake_case to camelCase for consistency
+      return data.map(product => ({
+        ...product,
+        oldPrice: product.old_price || product.oldPrice || 0
+      }));
     }
 
     // If no products in Supabase, return default catalog
@@ -1738,43 +1756,67 @@ const setupCheckout = () => {
           color: "#000000",
         },
         handler: async function (response) {
-          // Payment successful
-          const order = createOrder({
-            id: orderId,
-            items: cart,
-            amount: total,
-            subtotal,
-            discount,
-            total,
-            payment: {
-              razorpay_order_id: response.razorpay_order_id,
-              razorpay_payment_id: response.razorpay_payment_id,
-              razorpay_signature: response.razorpay_signature,
-            },
-            customer: details,
-            paymentMethod: "Razorpay",
-            paymentStatus: "paid",
-            transactionId: response.razorpay_payment_id,
-          });
+          try {
+            console.log("Payment successful!");
+            
+            // Payment successful
+            const order = createOrder({
+              id: orderId,
+              items: cart,
+              amount: total,
+              subtotal,
+              discount,
+              total,
+              payment: {
+                razorpay_order_id: response.razorpay_order_id,
+                razorpay_payment_id: response.razorpay_payment_id,
+                razorpay_signature: response.razorpay_signature,
+              },
+              customer: details,
+              paymentMethod: "Razorpay",
+              paymentStatus: "paid",
+              transactionId: response.razorpay_payment_id,
+            });
 
-          const history = loadOrderHistory();
-          history.unshift(order);
-          saveOrderHistory(history);
-          saveLastOrder(order);
+            console.log("Order created:", order);
 
-          // Save to Supabase
-          await saveOrderToSupabase(order);
+            // Save to localStorage first
+            const history = loadOrderHistory();
+            history.unshift(order);
+            saveOrderHistory(history);
+            saveLastOrder(order);
 
-          sendOrderEmail(order);
-          sendAdminNotification(order);
-          await sendTelegramNotification(order);
+            console.log("Saved to localStorage");
 
-          saveCart([]);
-          saveCoupon(null);
-          renderCart([]);
-          updateCartBadge();
+            // Save to Supabase
+            console.log("Saving to Supabase...");
+            await saveOrderToSupabase(order);
 
-          window.location.href = "order-success.html";
+            // Send notifications
+            console.log("Sending email to customer...");
+            sendOrderEmail(order);
+            
+            console.log("Sending email to admin...");
+            sendAdminNotification(order);
+            
+            console.log("Sending Telegram notification...");
+            await sendTelegramNotification(order);
+
+            // Clear cart
+            saveCart([]);
+            saveCoupon(null);
+            renderCart([]);
+            updateCartBadge();
+
+            console.log("Redirecting to success page...");
+            // Small delay to ensure all async operations complete
+            setTimeout(() => {
+              window.location.href = "order-success.html";
+            }, 500);
+          } catch (error) {
+            console.error("Error in payment handler:", error);
+            alert("Payment was successful, but there was an error processing your order. Please contact support with Order ID: " + orderId);
+          }
         },
         modal: {
           ondismiss: function () {

@@ -1,5 +1,7 @@
 # Simple Supabase Backend Setup
 
+> **⚠️ ALREADY HAVE TABLES?** If you already created the tables before, run the SQL in **SUPABASE_UPDATE.sql** to add the new Razorpay fields and old_price column!
+
 ## What You'll Get:
 ✅ Orders stored in cloud database (never lost)  
 ✅ Products stored in cloud (sync across devices)  
@@ -40,11 +42,14 @@ CREATE TABLE orders (
   customer_email TEXT,
   customer_phone TEXT,
   transaction_id TEXT,
+  razorpay_order_id TEXT,
+  razorpay_payment_id TEXT,
+  razorpay_signature TEXT,
   items JSONB,
   total_amount DECIMAL(10,2),
   discount DECIMAL(10,2) DEFAULT 0,
   payment_status TEXT DEFAULT 'pending',
-  payment_method TEXT DEFAULT 'UPI QR',
+  payment_method TEXT DEFAULT 'Razorpay',
   created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
@@ -53,6 +58,7 @@ CREATE TABLE products (
   id TEXT PRIMARY KEY,
   title TEXT NOT NULL,
   price DECIMAL(10,2) NOT NULL,
+  old_price DECIMAL(10,2),
   image TEXT,
   tag TEXT,
   rating DECIMAL(2,1),
