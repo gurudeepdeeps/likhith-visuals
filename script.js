@@ -1,9 +1,9 @@
-const STORAGE_KEY = "faxpc-cart";
-const SEED_KEY = "faxpc-cart-seeded";
-const COUPON_KEY = "faxpc-coupon";
-const ORDER_HISTORY_KEY = "faxpc-order-history";
-const LAST_ORDER_KEY = "faxpc-last-order";
-const CHECKOUT_DETAILS_KEY = "faxpc-checkout-details";
+const STORAGE_KEY = "likhith-visuals-cart";
+const SEED_KEY = "likhith-visuals-cart-seeded";
+const COUPON_KEY = "likhith-visuals-coupon";
+const ORDER_HISTORY_KEY = "likhith-visuals-order-history";
+const LAST_ORDER_KEY = "likhith-visuals-last-order";
+const CHECKOUT_DETAILS_KEY = "likhith-visuals-checkout-details";
 const PRODUCTS_STORAGE_KEY = "admin-products";
 
 const EMAILJS_PUBLIC_KEY = "B7zVzclIjXPJJ6C0D";
@@ -119,8 +119,8 @@ const productCatalog = [
     features: ["13+ assets compatible with Photoshop CC."],
   },
   {
-    id: "faxpc-fonts-pack",
-    title: "FAXPC x Font's Pack!",
+    id: "likhith-visuals-fonts-pack",
+    title: "Likhith Visuals x Font's Pack!",
     price: 29,
     oldPrice: 99,
     tag: "30+/ZIP FILE",
@@ -175,7 +175,7 @@ const productCatalog = [
   },
   {
     id: "cool-transitions-pr-files",
-    title: "FAXPC x Cool Transitions Pr-Files!",
+    title: "Likhith Visuals x Cool Transitions Pr-Files!",
     price: 49,
     oldPrice: 299,
     tag: "3+/PNG FILE",
@@ -1199,7 +1199,7 @@ const renderCart = (cart) => {
         </div>
         <div class="cart-details">
           <h3>${item.title}</h3>
-          <div class="cart-vendor">FAXPC</div>
+          <div class="cart-vendor">Likhith Visuals</div>
           <div class="cart-qty">
             <button class="qty-btn" data-action="decrease" aria-label="Decrease quantity">-</button>
             <span class="qty-count">${item.qty}</span>
@@ -1777,6 +1777,9 @@ const setupCheckout = () => {
   }
 
   button.addEventListener("click", async () => {
+    console.log("🛒 Checkout button clicked");
+    console.log("ℹ️ Note: Razorpay CORS warnings (x-rtb-fingerprint-id) are normal and can be ignored");
+    
     const cart = loadCart() || [];
     if (cart.length === 0) {
       window.alert("Your cart is empty.");
@@ -1799,6 +1802,8 @@ const setupCheckout = () => {
     const orderId = createOrderId();
 
     try {
+      console.log("💳 Creating Razorpay order...", { orderId, amount: total });
+      
       // Create Razorpay order via Netlify function
       const response = await fetch(RAZORPAY_ORDER_ENDPOINT, {
         method: "POST",
@@ -1815,7 +1820,10 @@ const setupCheckout = () => {
       }
 
       const { id: razorpayOrderId } = await response.json();
+      console.log("✅ Razorpay order created successfully", { razorpayOrderId });
 
+      console.log("🚀 Opening Razorpay Checkout modal...");
+      
       // Open Razorpay Checkout
       const options = {
         key: RAZORPAY_KEY_ID,
