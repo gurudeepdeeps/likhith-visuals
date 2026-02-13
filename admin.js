@@ -113,6 +113,49 @@ const loadAdminData = async () => {
   await updateStats();
 };
 
+const PRODUCT_STATUS_OPTIONS = ["Sent on whatsapp", "sent on email", "pending", "rejected"];
+
+const formatOrderDate = (value) => {
+  if (!value) {
+    return "";
+  }
+
+  const parsed = new Date(value);
+  if (Number.isNaN(parsed.getTime())) {
+    return String(value);
+  }
+
+  return parsed.toLocaleString("en-IN", { timeZone: "Asia/Kolkata" });
+};
+
+const formatOrderItems = (items) => {
+  if (!Array.isArray(items) || items.length === 0) {
+    return "";
+  }
+
+  return items
+    .map((item) => {
+      if (item && item.title) {
+        return `${item.title}${item.qty ? ` (x${item.qty})` : ""}`;
+      }
+      return JSON.stringify(item);
+    })
+    .join(", ");
+};
+
+const buildProductStatusSelect = (order) => {
+  const selected = order.productStatus || "pending";
+  const disabled = !supabaseClient ? "disabled" : "";
+  const options = PRODUCT_STATUS_OPTIONS.map((option) => {
+    const isSelected = option === selected ? "selected" : "";
+    return `<option value="${option}" ${isSelected}>${option}</option>`;
+  }).join("");
+
+  return `<select class="admin-product-status" data-order-id="${order.id}" data-current-status="${selected}" ${disabled}>
+    ${options}
+  </select>`;
+};
+
 // Render orders table
 const renderOrders = async () => {
   const tbody = document.getElementById("orders-table-body");
@@ -123,30 +166,32 @@ const renderOrders = async () => {
   tbody.innerHTML = "";
 
   if (orders.length === 0) {
-    tbody.innerHTML = '<tr><td colspan="10" style="text-align: center; padding: 24px">No orders yet</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="17" style="text-align: center; padding: 24px">No orders yet</td></tr>';
     return;
   }
 
   orders.forEach((order) => {
     const row = document.createElement("tr");
-    const date = order.createdAt
-      ? new Date(order.createdAt).toLocaleString("en-IN", { timeZone: "Asia/Kolkata" })
-      : "";
-    const items = (order.items || [])
-      .map((item) => `${item.title} (x${item.qty})`)
-      .join(", ");
+    const items = formatOrderItems(order.items);
 
     row.innerHTML = `
-      <td><strong>${order.id}</strong></td>
-      <td>${date}</td>
-      <td>${order.customer?.name || "N/A"}</td>
-      <td>${order.customer?.email || "N/A"}</td>
-      <td>${order.customer?.phone || "N/A"}</td>
-      <td><strong>${order.transactionId || "N/A"}</strong></td>
-      <td><strong>${formatPrice(order.amount || 0)}</strong></td>
-      <td><span class="status-badge status-${order.paymentStatus || "pending"}">${order.paymentStatus || "pending"}</span></td>
-      <td>${order.paymentMethod || "N/A"}</td>
-      <td style="max-width: 200px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap">${items}</td>
+      <td><strong>${order.id || ""}</strong></td>
+      <td>${order.orderNumber || ""}</td>
+      <td>${order.customerName || ""}</td>
+      <td>${order.customerEmail || ""}</td>
+      <td>${order.customerPhone || ""}</td>
+      <td>${order.razorpayOrderId || ""}</td>
+      <td>${order.razorpayPaymentId || ""}</td>
+      <td>${order.razorpaySignature || ""}</td>
+      <td style="max-width: 240px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap">${items}</td>
+      <td>${formatPrice(order.subtotal || 0)}</td>
+      <td>${formatPrice(order.discount || 0)}</td>
+      <td><strong>${formatPrice(order.totalAmount || 0)}</strong></td>
+      <td>${order.paymentStatus || "pending"}</td>
+      <td>${order.paymentMethod || ""}</td>
+      <td>${formatOrderDate(order.createdAt)}</td>
+      <td>${formatOrderDate(order.uploadedAt)}</td>
+      <td>${buildProductStatusSelect(order)}</td>
     `;
     tbody.appendChild(row);
   });
@@ -157,7 +202,7 @@ const updateStats = async () => {
   const orders = await loadOrdersFromSupabase();
   const totalOrders = orders.length;
   const pendingOrders = orders.filter((o) => o.paymentStatus === "pending").length;
-  const totalRevenue = orders.reduce((sum, o) => sum + (o.amount || 0), 0);
+  const totalRevenue = orders.reduce((sum, o) => sum + (o.totalAmount || o.amount || 0), 0);
 
   const totalEl = document.getElementById("stat-total-orders");
   const pendingEl = document.getElementById("stat-pending");
@@ -177,35 +222,45 @@ const exportOrdersCSV = async () => {
   }
 
   const headers = [
-    "Order ID",
-    "Date",
-    "Customer Name",
-    "Email",
-    "Phone",
-    "Transaction ID",
-    "Amount",
-    "Status",
-    "Method",
-    "Items",
-    "Discount",
+    "id",
+    "order_number",
+    "customer_name",
+    "customer_email",
+    "customer_phone",
+    "razorpay_order_id",
+    "razorpay_payment_id",
+    "razorpay_signature",
+    "items",
+    "subtotal",
+    "discount",
+    "total_amount",
+    "payment_status",
+    "payment_method",
+    "created_at",
+    "uploaded_at",
+    "product_status",
   ];
 
   const rows = orders.map((order) => {
-    const items = (order.items || [])
-      .map((item) => `${item.title} x${item.qty}`)
-      .join("; ");
+    const items = Array.isArray(order.items) ? JSON.stringify(order.items) : "";
     return [
-      order.id,
-      new Date(order.createdAt).toLocaleString(),
-      order.customer?.name || "",
-      order.customer?.email || "",
-      order.customer?.phone || "",
-      order.transactionId || "",
-      order.amount || 0,
-      order.paymentStatus || "pending",
-      order.paymentMethod || "UPI QR",
+      order.id || "",
+      order.orderNumber || "",
+      order.customerName || "",
+      order.customerEmail || "",
+      order.customerPhone || "",
+      order.razorpayOrderId || "",
+      order.razorpayPaymentId || "",
+      order.razorpaySignature || "",
       items,
+      order.subtotal || 0,
       order.discount || 0,
+      order.totalAmount || 0,
+      order.paymentStatus || "pending",
+      order.paymentMethod || "",
+      order.createdAt || "",
+      order.uploadedAt || "",
+      order.productStatus || "pending",
     ];
   });
 
@@ -237,6 +292,58 @@ const setupOrderActions = () => {
   if (exportBtn) {
     exportBtn.addEventListener("click", exportOrdersCSV);
   }
+};
+
+const updateOrderProductStatus = async (orderId, status) => {
+  if (!supabaseClient) {
+    return false;
+  }
+
+  try {
+    const { error } = await supabaseClient
+      .from("orders")
+      .update({ product_status: status, uploaded_at: new Date().toISOString() })
+      .eq("id", orderId);
+
+    if (error) {
+      console.error("Supabase product status update error:", error);
+      return false;
+    }
+
+    return true;
+  } catch (error) {
+    console.error("Failed to update product status:", error);
+    return false;
+  }
+};
+
+const setupProductStatusUpdates = () => {
+  const tbody = document.getElementById("orders-table-body");
+  if (!tbody) {
+    return;
+  }
+
+  tbody.addEventListener("change", async (event) => {
+    const target = event.target;
+    if (!target || !target.classList.contains("admin-product-status")) {
+      return;
+    }
+
+    const orderId = target.dataset.orderId;
+    const status = target.value;
+    if (!orderId) {
+      return;
+    }
+
+    const success = await updateOrderProductStatus(orderId, status);
+    if (!success) {
+      alert("Failed to update product status. Please try again.");
+      target.value = target.dataset.currentStatus || "pending";
+      return;
+    }
+
+    target.dataset.currentStatus = status;
+  });
 };
 
 // Product Management
@@ -514,5 +621,6 @@ document.addEventListener("DOMContentLoaded", () => {
   setupAdminLogout();
   setupAdminTabs();
   setupOrderActions();
+  setupProductStatusUpdates();
   setupProductModal();
 });

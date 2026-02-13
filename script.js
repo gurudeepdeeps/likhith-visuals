@@ -630,7 +630,9 @@ const saveOrderToSupabase = async (order) => {
       total_amount: Number(order.total || order.amount || 0),
       payment_status: order.paymentStatus || "pending",
       payment_method: order.paymentMethod || "Razorpay",
-      created_at: order.createdAt || new Date().toISOString()
+      created_at: order.createdAt || new Date().toISOString(),
+      uploaded_at: null,
+      product_status: "pending"
     };
 
     console.log("🔵 Inserting order to Supabase:", orderData);
@@ -664,7 +666,26 @@ const saveOrderToSupabase = async (order) => {
 const loadOrdersFromSupabase = async () => {
   if (!supabaseClient) {
     console.warn("Supabase not initialized, using localStorage");
-    return loadOrderHistory();
+    const localOrders = loadOrderHistory();
+    return localOrders.map((order) => ({
+      id: order.id,
+      orderNumber: order.id,
+      customerName: order.customer?.name || "",
+      customerEmail: order.customer?.email || "",
+      customerPhone: order.customer?.phone || "",
+      razorpayOrderId: order.payment?.razorpay_order_id || "",
+      razorpayPaymentId: order.transactionId || "",
+      razorpaySignature: order.payment?.razorpay_signature || "",
+      items: order.items || [],
+      subtotal: parseFloat(order.subtotal || order.amount || 0),
+      discount: parseFloat(order.discount || 0),
+      totalAmount: parseFloat(order.total || order.amount || 0),
+      paymentStatus: order.paymentStatus || "pending",
+      paymentMethod: order.paymentMethod || "",
+      createdAt: order.createdAt || "",
+      uploadedAt: order.createdAt || "",
+      productStatus: order.productStatus || "pending",
+    }));
   }
 
   try {
@@ -678,28 +699,24 @@ const loadOrdersFromSupabase = async () => {
       return loadOrderHistory();
     }
 
-    // Transform Supabase data to match our order format
     const orders = data.map(row => ({
       id: row.id,
-      customer: {
-        name: row.customer_name,
-        email: row.customer_email,
-        phone: row.customer_phone
-      },
-      transactionId: row.razorpay_payment_id || row.id,
-      items: row.items,
-      subtotal: parseFloat(row.subtotal || row.total_amount),
-      amount: parseFloat(row.total_amount),
-      total: parseFloat(row.total_amount),
+      orderNumber: row.order_number || row.id,
+      customerName: row.customer_name || "",
+      customerEmail: row.customer_email || "",
+      customerPhone: row.customer_phone || "",
+      razorpayOrderId: row.razorpay_order_id || "",
+      razorpayPaymentId: row.razorpay_payment_id || "",
+      razorpaySignature: row.razorpay_signature || "",
+      items: row.items || [],
+      subtotal: parseFloat(row.subtotal || row.total_amount || 0),
       discount: parseFloat(row.discount || 0),
-      paymentStatus: row.payment_status,
-      paymentMethod: row.payment_method,
-      payment: {
-        razorpay_order_id: row.razorpay_order_id,
-        razorpay_payment_id: row.razorpay_payment_id,
-        razorpay_signature: row.razorpay_signature
-      },
-      createdAt: row.created_at
+      totalAmount: parseFloat(row.total_amount || 0),
+      paymentStatus: row.payment_status || "pending",
+      paymentMethod: row.payment_method || "",
+      createdAt: row.created_at || "",
+      uploadedAt: row.uploaded_at || "",
+      productStatus: row.product_status || "pending",
     }));
 
     console.log(`✅ Loaded ${orders.length} orders from Supabase`);
@@ -727,6 +744,7 @@ const saveProductToSupabase = async (product) => {
         image: product.image || "",
         tag: product.tag || "",
         rating: product.rating || 0,
+        description: product.description || "",
         features: product.features || [],
         is_active: true
       });
@@ -803,7 +821,9 @@ const loadProductsFromSupabase = async () => {
       // Map snake_case to camelCase for consistency
       return data.map(product => ({
         ...product,
-        oldPrice: product.old_price || product.oldPrice || 0
+        oldPrice: product.old_price || product.oldPrice || 0,
+        description: product.description || "",
+        features: Array.isArray(product.features) ? product.features : [],
       }));
     }
 
@@ -844,9 +864,11 @@ const seedProductsToSupabaseOnce = async () => {
       id: product.id,
       title: product.title,
       price: product.price,
+      old_price: product.oldPrice || null,
       image: product.image || "",
       tag: product.tag || "",
       rating: product.rating || 0,
+      description: product.description || "",
       features: product.features || [],
       is_active: true,
     }));
