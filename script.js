@@ -256,6 +256,23 @@ const formatPrice = (value) => `Rs. ${value.toFixed(2)}`;
 
 const createOrderId = () => `LV-${Date.now()}`;
 
+const createOrder = (orderData) => {
+  return {
+    id: orderData.id || createOrderId(),
+    customer: orderData.customer || {},
+    items: orderData.items || [],
+    amount: orderData.amount || orderData.total || 0,
+    subtotal: orderData.subtotal || orderData.amount || 0,
+    discount: orderData.discount || 0,
+    total: orderData.total || orderData.amount || 0,
+    transactionId: orderData.transactionId || "",
+    paymentMethod: orderData.paymentMethod || "Razorpay",
+    paymentStatus: orderData.paymentStatus || "pending",
+    payment: orderData.payment || {},
+    createdAt: orderData.createdAt || new Date().toISOString(),
+  };
+};
+
 const normalizeImagePath = (path) => {
   if (!path) {
     return "assets/placeholder.jpg";
@@ -416,11 +433,20 @@ const initEmailJs = () => {
 };
 
 const sendOrderEmail = (order) => {
-  if (!window.emailjs || !isEmailJsConfigured()) {
+  console.log("📧 sendOrderEmail called", { orderId: order?.id });
+  
+  if (!window.emailjs) {
+    console.error("❌ EmailJS not loaded");
+    return;
+  }
+  
+  if (!isEmailJsConfigured()) {
+    console.error("❌ EmailJS not configured");
     return;
   }
 
   if (!order?.customer?.email) {
+    console.error("❌ No customer email in order");
     return;
   }
 
@@ -437,6 +463,8 @@ const sendOrderEmail = (order) => {
     total: Number(order.amount || 0).toFixed(2),
   };
 
+  console.log("📧 Sending customer email to:", order.customer.email);
+
   window.emailjs
     .send(EMAILJS_SERVICE_ID, EMAILJS_TEMPLATE_ID, {
       order_id: order.id,
@@ -449,13 +477,24 @@ const sendOrderEmail = (order) => {
       order_total: formatPrice(order.amount),
       order_date: new Date(order.createdAt).toLocaleString(),
     })
+    .then(() => {
+      console.log("✅ Customer email sent successfully");
+    })
     .catch((error) => {
-      console.error("Email send failed:", error);
+      console.error("❌ Customer email send failed:", error);
     });
 };
 
 const sendAdminNotification = (order) => {
-  if (!window.emailjs || !isEmailJsConfigured()) {
+  console.log("📧 sendAdminNotification called", { orderId: order?.id });
+  
+  if (!window.emailjs) {
+    console.error("❌ EmailJS not loaded for admin notification");
+    return;
+  }
+  
+  if (!isEmailJsConfigured()) {
+    console.error("❌ EmailJS not configured for admin notification");
     return;
   }
 
@@ -463,41 +502,53 @@ const sendAdminNotification = (order) => {
     .map((item) => `${item.title} x${item.qty} - Rs. ${item.price}`)
     .join("\n");
 
+  console.log("📧 Sending admin notification to:", ADMIN_EMAIL);
+
   window.emailjs
     .send(EMAILJS_SERVICE_ID, EMAILJS_ADMIN_TEMPLATE_ID, {
       to_email: ADMIN_EMAIL,
       order_id: order.id,
-      transaction_id: order.transactionId || "N/A",
+      transaction_id: order.transactionId || order.payment?.razorpay_payment_id || "N/A",
       customer_name: order.customer.name || "N/A",
       customer_email: order.customer.email || "N/A",
       customer_phone: order.customer.phone || "N/A",
       order_items: itemsList,
-      order_total: formatPrice(order.amount),
+      order_total: formatPrice(order.amount || order.total),
       payment_status: order.paymentStatus || "pending",
-      payment_method: order.paymentMethod || "UPI QR",
+      payment_method: order.paymentMethod || "Razorpay",
       order_date: new Date(order.createdAt).toLocaleString(),
     })
+    .then(() => {
+      console.log("✅ Admin email sent successfully");
+    })
     .catch((error) => {
-      console.error("Admin email failed:", error);
+      console.error("❌ Admin email send failed:", error);
     });
 };
 
 const sendTelegramNotification = async (order) => {
+  console.log("📱 sendTelegramNotification called", { orderId: order?.id });
+  
   if (!TELEGRAM_BOT_TOKEN || TELEGRAM_BOT_TOKEN.startsWith("YOUR_") || 
       !TELEGRAM_CHAT_ID || TELEGRAM_CHAT_ID.startsWith("YOUR_")) {
-    console.log("Telegram not configured, skipping notification");
+    console.error("❌ Telegram not configured, skipping notification");
     return false;
   }
+  
+  console.log("📱 Telegram configured, sending message...");
 
   const itemsList = (order.items || [])
     .map((item) => `  ${item.title} x${item.qty} - Rs. ${item.price}`)
     .join('\n');
 
+  // Get payment ID
+  const paymentId = order.transactionId || order.payment?.razorpay_payment_id || 'Pending';
+
   // Plain text message without Markdown to avoid parsing errors
   const message = `🆕 NEW ORDER RECEIVED
 
 📦 Order ID: ${order.id}
-💳 UTR Number: ${order.transactionId || 'Pending'}
+💳 Payment ID: ${paymentId}
 
 👤 Customer Details:
   Name: ${order.customer.name}
@@ -507,12 +558,14 @@ const sendTelegramNotification = async (order) => {
 🛍️ Order Items:
 ${itemsList}
 
-💰 Total Amount: Rs. ${order.amount}
+💰 Total Amount: Rs. ${order.total || order.amount}
 📋 Status: ${order.paymentStatus || 'pending'}
-💳 Method: ${order.paymentMethod || 'UPI QR'}
+💳 Method: ${order.paymentMethod || 'Razorpay'}
 📅 Date: ${new Date(order.createdAt).toLocaleString('en-IN')}
 
 ✅ Check admin panel for more details!`;
+
+  console.log("📱 Sending to Telegram:", { chatId: TELEGRAM_CHAT_ID });
 
   try {
     const response = await fetch(
@@ -528,23 +581,31 @@ ${itemsList}
     );
 
     if (response.ok) {
-      console.log("Telegram notification sent successfully");
+      const result = await response.json();
+      console.log("✅ Telegram notification sent successfully:", result);
       return true;
     } else {
       const errorText = await response.text();
-      console.error("Telegram notification failed:", errorText);
+      console.error("❌ Telegram notification failed:", {
+        status: response.status,
+        statusText: response.statusText,
+        error: errorText
+      });
       return false;
     }
   } catch (error) {
-    console.error("Telegram notification error:", error);
+    console.error("❌ Telegram notification error:", error);
     return false;
   }
 };
 
 // Supabase Database Functions
 const saveOrderToSupabase = async (order) => {
+  console.log("🔵 saveOrderToSupabase called", { orderId: order?.id });
+  
   if (!supabaseClient) {
-    console.warn("Supabase not initialized");
+    console.error("❌ Supabase client not initialized");
+    alert("Database error: Supabase not connected. Order saved locally only.");
     return false;
   }
 
@@ -554,34 +615,48 @@ const saveOrderToSupabase = async (order) => {
     const razorpayPaymentId = order.payment?.razorpay_payment_id || null;
     const razorpaySignature = order.payment?.razorpay_signature || null;
 
+    const orderData = {
+      id: order.id,
+      order_number: order.id, // Same as ID for now
+      customer_name: order.customer?.name || "",
+      customer_email: order.customer?.email || "",
+      customer_phone: order.customer?.phone || "",
+      razorpay_order_id: razorpayOrderId,
+      razorpay_payment_id: razorpayPaymentId,
+      razorpay_signature: razorpaySignature,
+      items: order.items || [],
+      subtotal: Number(order.subtotal || order.amount || 0),
+      discount: Number(order.discount || 0),
+      total_amount: Number(order.total || order.amount || 0),
+      payment_status: order.paymentStatus || "pending",
+      payment_method: order.paymentMethod || "Razorpay",
+      created_at: order.createdAt || new Date().toISOString()
+    };
+
+    console.log("🔵 Inserting order to Supabase:", orderData);
+
     const { data, error } = await supabaseClient
       .from('orders')
-      .insert({
-        id: order.id,
-        customer_name: order.customer.name || "",
-        customer_email: order.customer.email || "",
-        customer_phone: order.customer.phone || "",
-        transaction_id: order.transactionId || razorpayPaymentId || "",
-        items: order.items || [],
-        total_amount: order.amount,
-        discount: order.discount || 0,
-        payment_status: order.paymentStatus || "pending",
-        payment_method: order.paymentMethod || "Razorpay",
-        razorpay_order_id: razorpayOrderId,
-        razorpay_payment_id: razorpayPaymentId,
-        razorpay_signature: razorpaySignature,
-        created_at: order.createdAt
-      });
+      .insert(orderData)
+      .select();
 
     if (error) {
-      console.error("Supabase order save error:", error);
+      console.error("❌ Supabase order save error:", error);
+      console.error("❌ Error details:", {
+        message: error.message,
+        details: error.details,
+        hint: error.hint,
+        code: error.code
+      });
+      alert(`Database error: ${error.message}. Order saved locally only.`);
       return false;
     }
 
-    console.log("Order saved to Supabase successfully");
+    console.log("✅ Order saved to Supabase successfully:", data);
     return true;
   } catch (error) {
-    console.error("Failed to save order to Supabase:", error);
+    console.error("❌ Failed to save order to Supabase:", error);
+    alert(`Unexpected error: ${error.message}. Order saved locally only.`);
     return false;
   }
 };
@@ -611,9 +686,11 @@ const loadOrdersFromSupabase = async () => {
         email: row.customer_email,
         phone: row.customer_phone
       },
-      transactionId: row.transaction_id || row.razorpay_payment_id,
+      transactionId: row.razorpay_payment_id || row.id,
       items: row.items,
+      subtotal: parseFloat(row.subtotal || row.total_amount),
       amount: parseFloat(row.total_amount),
+      total: parseFloat(row.total_amount),
       discount: parseFloat(row.discount || 0),
       paymentStatus: row.payment_status,
       paymentMethod: row.payment_method,
@@ -625,7 +702,7 @@ const loadOrdersFromSupabase = async () => {
       createdAt: row.created_at
     }));
 
-    console.log(`Loaded ${orders.length} orders from Supabase`);
+    console.log(`✅ Loaded ${orders.length} orders from Supabase`);
     return orders;
   } catch (error) {
     console.error("Failed to load orders from Supabase:", error);
