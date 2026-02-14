@@ -969,17 +969,56 @@ const deleteProductFromSupabase = async (productId) => {
   }
 
   try {
-    const { error } = await supabaseClient
+    // Step 1: Get product details to find image URL
+    const { data: product, error: fetchError } = await supabaseClient
       .from('products')
-      .update({ is_active: false })
-      .eq('id', productId);
+      .select('*')
+      .eq('id', productId)
+      .single();
 
-    if (error) {
-      console.error("Supabase product delete error:", error);
+    if (fetchError) {
+      console.error("Error fetching product for deletion:", fetchError);
       return false;
     }
 
-    console.log("Product deleted from Supabase successfully");
+    // Step 2: Delete image from Supabase Storage if it exists
+    if (product?.image_url) {
+      try {
+        // Extract filename from URL (format: ...product-images/filename.ext)
+        const urlParts = product.image_url.split('/');
+        const fileName = urlParts[urlParts.length - 1];
+        
+        if (fileName && fileName.startsWith('product-')) {
+          const { error: deleteImageError } = await supabaseClient
+            .storage
+            .from('product-images')
+            .remove([fileName]);
+
+          if (deleteImageError) {
+            console.warn("Warning: Could not delete image from storage:", deleteImageError);
+            // Continue with product deletion even if image deletion fails
+          } else {
+            console.log("Image deleted from storage successfully");
+          }
+        }
+      } catch (imageError) {
+        console.warn("Warning: Error processing image deletion:", imageError);
+        // Continue with product deletion
+      }
+    }
+
+    // Step 3: Delete product record from database
+    const { error: deleteError } = await supabaseClient
+      .from('products')
+      .delete()
+      .eq('id', productId);
+
+    if (deleteError) {
+      console.error("Supabase product delete error:", deleteError);
+      return false;
+    }
+
+    console.log("Product and image deleted from Supabase successfully");
     return true;
   } catch (error) {
     console.error("Failed to delete product from Supabase:", error);
