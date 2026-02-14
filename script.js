@@ -773,6 +773,7 @@ const saveProductToSupabase = async (product) => {
         old_price: product.oldPrice || null,
         image: product.image || "",
         download_url: product.downloadUrl || "",
+        filter_tag: product.filterTag || "regular",
         tag: product.tag || "",
         rating: product.rating || 0,
         description: product.description || "",
@@ -862,6 +863,7 @@ const loadProductsFromSupabase = async () => {
         ...product,
         oldPrice: product.old_price || product.oldPrice || 0,
         downloadUrl: product.download_url || product.downloadUrl || "",
+        filterTag: product.filter_tag || product.filterTag || "regular",
         description: product.description || "",
         features: Array.isArray(product.features) ? product.features : [],
       }));
@@ -907,6 +909,7 @@ const seedProductsToSupabaseOnce = async () => {
       old_price: product.oldPrice || null,
       image: product.image || "",
       download_url: product.downloadUrl || "",
+      filter_tag: product.filterTag || "regular",
       tag: product.tag || "",
       rating: product.rating || 0,
       description: product.description || "",
@@ -936,6 +939,7 @@ const normalizeSupabaseProduct = (product) => ({
   price: Number(product.price) || 0,
   oldPrice: Number(product.oldPrice || product.price) || 0,
   tag: product.tag || "",
+  filterTag: product.filterTag || product.filter_tag || "regular",
   image: product.image || "",
   downloadUrl: product.downloadUrl || product.download_url || "",
   rating: Number(product.rating) || 0,
@@ -1513,6 +1517,37 @@ const setupProductDetailsPage = async () => {
   document.title = `${product.title} - Likhith Visuals`;
 };
 
+const getProductFrequency = async () => {
+  if (!supabaseClient) {
+    return {};
+  }
+
+  try {
+    const { data: orders, error } = await supabaseClient
+      .from('orders')
+      .select('items');
+
+    if (error || !orders) {
+      return {};
+    }
+
+    const frequency = {};
+    orders.forEach((order) => {
+      if (order.items && Array.isArray(order.items)) {
+        order.items.forEach((item) => {
+          const productId = item.id;
+          frequency[productId] = (frequency[productId] || 0) + item.qty;
+        });
+      }
+    });
+
+    return frequency;
+  } catch (error) {
+    console.error("Failed to get product frequency:", error);
+    return {};
+  }
+};
+
 const renderHomeProducts = async () => {
   if (document.body.dataset.page !== "home") {
     return;
@@ -1524,6 +1559,8 @@ const renderHomeProducts = async () => {
   if (!grid) {
     return;
   }
+
+  const frequency = await getProductFrequency();
 
   const thumbClasses = [
     "thumb-blue",
@@ -1572,6 +1609,8 @@ const renderHomeProducts = async () => {
         data-title="${product.title}"
         data-price="${product.price}"
         data-image="${normalizeImagePath(product.image)}"
+        data-frequency="${frequency[product.id] || 0}"
+        data-filter-tag="${product.filterTag || 'regular'}"
       >
         Add to Cart
       </button>
@@ -1597,6 +1636,9 @@ const setupSort = () => {
     return;
   }
 
+  // Set default sort to "newest"
+  sortSelect.value = "newest";
+
   const getPrice = (card) => {
     const button = card.querySelector(".add-to-cart");
     if (button?.dataset.price) {
@@ -1617,6 +1659,22 @@ const setupSort = () => {
     return card.querySelector("h3")?.textContent?.trim() || "";
   };
 
+  const getFrequency = (card) => {
+    const button = card.querySelector(".add-to-cart");
+    if (button?.dataset.frequency) {
+      return Number(button.dataset.frequency) || 0;
+    }
+    return 0;
+  };
+
+  const getFilterTag = (card) => {
+    const button = card.querySelector(".add-to-cart");
+    if (button?.dataset.filterTag) {
+      return button.dataset.filterTag;
+    }
+    return "regular";
+  };
+
   const hydrateCards = () => {
     const cards = Array.from(grid.querySelectorAll(".product-card"));
     return cards.map((card, index) => {
@@ -1628,6 +1686,8 @@ const setupSort = () => {
         card,
         price: getPrice(card),
         title: getTitle(card),
+        frequency: getFrequency(card),
+        filterTag: getFilterTag(card),
         index: Number(card.dataset.index) || 0,
       };
     });
@@ -1638,6 +1698,13 @@ const setupSort = () => {
     const cards = hydrateCards();
 
     const sorted = cards.sort((a, b) => {
+      if (value === "featured") {
+        // Prioritize products marked as featured, then by frequency
+        if (a.filterTag === "featured" && b.filterTag !== "featured") return -1;
+        if (a.filterTag !== "featured" && b.filterTag === "featured") return 1;
+        return b.frequency - a.frequency || b.index - a.index;
+      }
+
       if (value === "price-asc") {
         return a.price - b.price || a.index - b.index;
       }
@@ -1647,6 +1714,9 @@ const setupSort = () => {
       }
 
       if (value === "newest") {
+        // Prioritize products marked as newest, then by index (recently added)
+        if (a.filterTag === "newest" && b.filterTag !== "newest") return -1;
+        if (a.filterTag !== "newest" && b.filterTag === "newest") return 1;
         return b.index - a.index;
       }
 
@@ -1657,6 +1727,9 @@ const setupSort = () => {
   };
 
   sortSelect.addEventListener("change", applySort);
+  
+  // Apply default sort on page load
+  applySort();
 };
 
 const updateProductCount = () => {

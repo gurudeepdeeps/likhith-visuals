@@ -703,6 +703,16 @@ a {
   font-size: 13px;
 }
 
+.detail-field select {
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 10px 12px;
+  font-family: inherit;
+  font-size: 13px;
+  background-color: #fff;
+  cursor: pointer;
+}
+
 .detail-note {
   font-size: 12px;
   color: var(--muted);

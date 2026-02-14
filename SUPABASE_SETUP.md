@@ -60,6 +60,7 @@ CREATE TABLE products (
   price DECIMAL(10,2) NOT NULL,
   old_price DECIMAL(10,2),
   download_url TEXT,
+  filter_tag TEXT DEFAULT 'regular',
   image TEXT,
   tag TEXT,
   rating DECIMAL(2,1),

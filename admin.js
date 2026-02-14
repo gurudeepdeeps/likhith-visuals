@@ -420,6 +420,7 @@ const openProductModal = async (productId = null) => {
     document.getElementById("product-price").value = product.price;
     document.getElementById("product-old-price").value = product.oldPrice || "";
     document.getElementById("product-tag").value = product.tag || "";
+    document.getElementById("product-filter-tag").value = product.filterTag || "regular";
     document.getElementById("product-rating").value = product.rating || "";
     document.getElementById("product-image").value = product.image;
     document.getElementById("product-download-url").value = product.downloadUrl || "";
@@ -529,6 +530,7 @@ const saveProductFromForm = async () => {
     price: Number(document.getElementById("product-price").value) || 0,
     oldPrice: Number(document.getElementById("product-old-price").value) || 0,
     tag: document.getElementById("product-tag").value.trim(),
+    filterTag: document.getElementById("product-filter-tag").value.trim(),
     rating: Number(document.getElementById("product-rating").value) || 5,
     image: imageUrl,
     downloadUrl: document.getElementById("product-download-url").value.trim(),
