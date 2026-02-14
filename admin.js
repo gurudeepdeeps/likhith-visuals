@@ -110,6 +110,7 @@ const setupAdminTabs = () => {
 const loadAdminData = async () => {
   await renderOrders();
   await renderProducts();
+  await renderCoupons();
   await updateStats();
 };
 
@@ -610,6 +611,181 @@ const setupProductActions = () => {
   };
 };
 
+// Coupon Management
+const renderCoupons = async () => {
+  const tbody = document.getElementById("coupons-table-body");
+  if (!tbody) return;
+
+  const coupons = await loadCouponsFromSupabase();
+  tbody.innerHTML = "";
+
+  if (coupons.length === 0) {
+    tbody.innerHTML = '<tr><td colspan="6" style="text-align: center; padding: 24px">No coupons yet</td></tr>';
+    return;
+  }
+
+  coupons.forEach((coupon) => {
+    const row = document.createElement("tr");
+    const typeLabel = coupon.type === "percent" ? `${coupon.value}% Off` : `Rs. ${coupon.value} Off`;
+    const statusBadge = coupon.status === "active" 
+      ? '<span style="color: #0f9d58; font-weight: bold;">● Active</span>'
+      : '<span style="color: #999;">● Inactive</span>';
+
+    row.innerHTML = `
+      <td><strong>${coupon.code}</strong></td>
+      <td>${coupon.type === "percent" ? "Percentage" : "Flat Amount"}</td>
+      <td>${typeLabel}</td>
+      <td>${coupon.description || "—"}</td>
+      <td>${statusBadge}</td>
+      <td>
+        <button class="button ghost edit-coupon" data-code="${coupon.code}">Edit</button>
+        <button class="button ghost delete-coupon" data-code="${coupon.code}">Delete</button>
+      </td>
+    `;
+    tbody.appendChild(row);
+  });
+
+  setupCouponActions();
+};
+
+const openCouponModal = async (couponCode = null) => {
+  const modal = document.getElementById("coupon-modal");
+  const title = document.getElementById("coupon-modal-title");
+  const form = document.getElementById("coupon-form");
+  if (!modal || !form) return;
+
+  form.reset();
+
+  if (couponCode) {
+    const coupons = await loadCouponsFromSupabase();
+    const coupon = coupons.find((c) => c.code === couponCode);
+    if (!coupon) return;
+
+    title.textContent = "Edit Coupon";
+    document.getElementById("coupon-edit-id").value = couponCode;
+    document.getElementById("coupon-code").value = coupon.code;
+    document.getElementById("coupon-code").readOnly = true; // Prevent changing code on edit
+    document.getElementById("coupon-type").value = coupon.type;
+    document.getElementById("coupon-value").value = coupon.value;
+    document.getElementById("coupon-description").value = coupon.description || "";
+    document.getElementById("coupon-status").value = coupon.status || "active";
+  } else {
+    title.textContent = "Add Coupon";
+    document.getElementById("coupon-edit-id").value = "";
+    document.getElementById("coupon-code").readOnly = false;
+    document.getElementById("coupon-status").value = "active";
+  }
+
+  modal.classList.add("open");
+  modal.removeAttribute("aria-hidden");
+};
+
+const closeCouponModal = () => {
+  const modal = document.getElementById("coupon-modal");
+  if (!modal) return;
+
+  modal.classList.remove("open");
+  modal.setAttribute("aria-hidden", "true");
+};
+
+const setupCouponModal = () => {
+  const addBtn = document.getElementById("add-coupon-btn");
+  const closeBtn = document.getElementById("coupon-modal-close");
+  const cancelBtn = document.getElementById("coupon-form-cancel");
+  const form = document.getElementById("coupon-form");
+
+  if (addBtn) {
+    addBtn.addEventListener("click", () => openCouponModal());
+  }
+
+  if (closeBtn) {
+    closeBtn.addEventListener("click", closeCouponModal);
+  }
+
+  if (cancelBtn) {
+    cancelBtn.addEventListener("click", closeCouponModal);
+  }
+
+  if (form) {
+    form.addEventListener("submit", (e) => {
+      e.preventDefault();
+      saveCouponFromForm();
+    });
+  }
+
+  // Auto-uppercase coupon code input
+  const codeInput = document.getElementById("coupon-code");
+  if (codeInput) {
+    codeInput.addEventListener("input", (e) => {
+      e.target.value = e.target.value.toUpperCase();
+    });
+  }
+};
+
+const saveCouponFromForm = async () => {
+  const editId = document.getElementById("coupon-edit-id").value;
+
+  const coupon = {
+    code: document.getElementById("coupon-code").value.trim().toUpperCase(),
+    type: document.getElementById("coupon-type").value,
+    value: parseFloat(document.getElementById("coupon-value").value) || 0,
+    description: document.getElementById("coupon-description").value.trim(),
+    status: document.getElementById("coupon-status").value,
+  };
+
+  if (!coupon.code) {
+    alert("Coupon code is required");
+    return;
+  }
+
+  if (coupon.value <= 0) {
+    alert("Coupon value must be greater than 0");
+    return;
+  }
+
+  // Save to Supabase
+  const success = await saveCouponToSupabase(coupon);
+  
+  if (success) {
+    await renderCoupons();
+    closeCouponModal();
+    alert("Coupon saved successfully");
+  } else {
+    alert("Failed to save coupon. Please try again.");
+  }
+};
+
+const setupCouponActions = () => {
+  const tbody = document.getElementById("coupons-table-body");
+  if (!tbody) return;
+
+  tbody.onclick = async (event) => {
+    const target = event.target;
+    if (!target) return;
+
+    if (target.classList.contains("edit-coupon")) {
+      const couponCode = target.dataset.code;
+      await openCouponModal(couponCode);
+      return;
+    }
+
+    if (target.classList.contains("delete-coupon")) {
+      const couponCode = target.dataset.code;
+      if (!couponCode) return;
+
+      if (confirm(`Are you sure you want to delete coupon "${couponCode}"?`)) {
+        const success = await deleteCouponFromSupabase(couponCode);
+        if (success) {
+          await renderCoupons();
+          alert("Coupon deleted");
+        } else {
+          alert("Failed to delete coupon. Please try again.");
+        }
+      }
+    }
+  };
+};
+
 // Initialize admin panel
 document.addEventListener("DOMContentLoaded", () => {
   console.log("DOMContentLoaded fired");
@@ -627,4 +803,5 @@ document.addEventListener("DOMContentLoaded", () => {
   setupOrderActions();
   setupProductStatusUpdates();
   setupProductModal();
+  setupCouponModal();
 });

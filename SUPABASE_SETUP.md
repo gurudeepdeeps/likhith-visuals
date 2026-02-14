@@ -69,9 +69,22 @@ CREATE TABLE products (
   created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
+-- Coupons Table
+CREATE TABLE coupons (
+  id BIGSERIAL PRIMARY KEY,
+  code TEXT UNIQUE NOT NULL,
+  type TEXT NOT NULL CHECK (type IN ('percent', 'flat')),
+  value DECIMAL(10,2) NOT NULL CHECK (value > 0),
+  description TEXT,
+  status TEXT NOT NULL DEFAULT 'active' CHECK (status IN ('active', 'inactive')),
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
 -- Enable Row Level Security (required for public access)
 ALTER TABLE orders ENABLE ROW LEVEL SECURITY;
 ALTER TABLE products ENABLE ROW LEVEL SECURITY;
+ALTER TABLE coupons ENABLE ROW LEVEL SECURITY;
 
 -- Allow public INSERT for orders (when customers place orders)
 CREATE POLICY "Allow public insert orders" ON orders
@@ -97,6 +110,23 @@ CREATE POLICY "Allow public update products" ON products
   USING (true);
 
 CREATE POLICY "Allow public delete products" ON products
+  FOR DELETE TO anon
+  USING (true);
+
+-- Allow public read active coupons
+CREATE POLICY "Allow public select active coupons" ON coupons
+  FOR SELECT TO anon
+  USING (status = 'active');
+
+CREATE POLICY "Allow public insert coupons" ON coupons
+  FOR INSERT TO anon
+  WITH CHECK (true);
+
+CREATE POLICY "Allow public update coupons" ON coupons
+  FOR UPDATE TO anon
+  USING (true);
+
+CREATE POLICY "Allow public delete coupons" ON coupons
   FOR DELETE TO anon
   USING (true);
 ```

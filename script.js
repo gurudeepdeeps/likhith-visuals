@@ -1026,6 +1026,144 @@ const deleteProductFromSupabase = async (productId) => {
   }
 };
 
+// ==================== COUPON MANAGEMENT ====================
+
+const loadCouponsFromSupabase = async () => {
+  if (!supabaseClient) {
+    console.warn("Supabase not initialized, using default coupon catalog");
+    return Object.entries(couponCatalog).map(([code, data]) => ({
+      code,
+      type: data.type,
+      value: data.value,
+      description: "",
+      status: "active"
+    }));
+  }
+
+  try {
+    const { data, error } = await supabaseClient
+      .from('coupons')
+      .select('*')
+      .order('created_at', { ascending: false });
+
+    if (error) {
+      console.error("Supabase load coupons error:", error);
+      return Object.entries(couponCatalog).map(([code, data]) => ({
+        code,
+        type: data.type,
+        value: data.value,
+        description: "",
+        status: "active"
+      }));
+    }
+
+    return data || [];
+  } catch (error) {
+    console.error("Failed to load coupons from Supabase:", error);
+    return Object.entries(couponCatalog).map(([code, data]) => ({
+      code,
+      type: data.type,
+      value: data.value,
+      description: "",
+      status: "active"
+    }));
+  }
+};
+
+const saveCouponToSupabase = async (coupon) => {
+  if (!supabaseClient) {
+    console.warn("Supabase not initialized");
+    return false;
+  }
+
+  try {
+    const { error } = await supabaseClient
+      .from('coupons')
+      .upsert({
+        code: coupon.code,
+        type: coupon.type,
+        value: coupon.value,
+        description: coupon.description || "",
+        status: coupon.status || "active",
+        updated_at: new Date().toISOString()
+      }, { onConflict: 'code' });
+
+    if (error) {
+      console.error("Supabase save coupon error:", error);
+      alert(`Supabase Error: ${error.message}\n\nMake sure the 'coupons' table exists with required columns.`);
+      return false;
+    }
+
+    console.log("Coupon saved to Supabase successfully");
+    return true;
+  } catch (error) {
+    console.error("Failed to save coupon to Supabase:", error);
+    return false;
+  }
+};
+
+const deleteCouponFromSupabase = async (couponCode) => {
+  if (!supabaseClient) {
+    console.warn("Supabase not initialized");
+    return false;
+  }
+
+  try {
+    const { error } = await supabaseClient
+      .from('coupons')
+      .delete()
+      .eq('code', couponCode);
+
+    if (error) {
+      console.error("Supabase coupon delete error:", error);
+      return false;
+    }
+
+    console.log("Coupon deleted from Supabase successfully");
+    return true;
+  } catch (error) {
+    console.error("Failed to delete coupon from Supabase:", error);
+    return false;
+  }
+};
+
+const validateCouponFromSupabase = async (couponCode) => {
+  if (!supabaseClient) {
+    console.warn("Supabase not initialized, using default coupons");
+    return couponCatalog[couponCode] || null;
+  }
+
+  try {
+    const { data, error } = await supabaseClient
+      .from('coupons')
+      .select('*')
+      .eq('code', couponCode.toUpperCase())
+      .eq('status', 'active')
+      .single();
+
+    if (error) {
+      if (error.code === 'PGRST116') {
+        // No matching rows - coupon not found
+        return null;
+      }
+      console.error("Supabase validate coupon error:", error);
+      return null;
+    }
+
+    if (data && data.status === 'active') {
+      return {
+        type: data.type,
+        value: data.value
+      };
+    }
+
+    return null;
+  } catch (error) {
+    console.error("Failed to validate coupon:", error);
+    return null;
+  }
+};
+
 const ensureSeededCart = () => {
   const existing = loadCart();
   if (existing) {
@@ -2133,7 +2271,7 @@ const setupCoupon = () => {
     message.style.color = isError ? "#d93025" : "#2e7d32";
   };
 
-  const applyCoupon = () => {
+  const applyCoupon = async () => {
     const code = input.value.trim().toUpperCase();
     if (!code) {
       saveCoupon(null);
@@ -2142,16 +2280,17 @@ const setupCoupon = () => {
       return;
     }
 
-    const coupon = couponCatalog[code];
+    // Validate coupon from Supabase
+    const coupon = await validateCouponFromSupabase(code);
     if (!coupon) {
       saveCoupon(null);
-      updateMessage("Invalid coupon code.", true);
+      updateMessage("Invalid or expired coupon code.", true);
       updateSubtotal(loadCart() || []);
       return;
     }
 
     saveCoupon({ code, ...coupon });
-    updateMessage(`Coupon ${code} applied.`);
+    updateMessage(`Coupon ${code} applied successfully!`);
     updateSubtotal(loadCart() || []);
   };
 
