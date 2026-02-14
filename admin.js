@@ -19,15 +19,11 @@ const setAdminAuth = (authenticated) => {
 // Login functionality
 const setupAdminLogin = () => {
   console.log("setupAdminLogin called");
-  console.log("ADMIN_PASSWORD is defined:", typeof ADMIN_PASSWORD !== 'undefined');
   
   const loginSection = document.getElementById("admin-login");
   const dashboard = document.getElementById("admin-dashboard");
   const form = document.getElementById("admin-login-form");
   const error = document.getElementById("admin-login-error");
-
-  console.log("Form element found:", !!form);
-  console.log("Error element found:", !!error);
 
   if (!form) {
     console.error("Login form not found!");
@@ -43,16 +39,24 @@ const setupAdminLogin = () => {
     return;
   }
 
-  form.addEventListener("submit", (e) => {
+  form.addEventListener("submit", async (e) => {
     console.log("Form submit event fired!");
     e.preventDefault();
     const password = document.getElementById("admin-password").value;
 
-    console.log("Login attempt with password:", password);
-    console.log("Expected password:", ADMIN_PASSWORD);
-    console.log("Match:", password === ADMIN_PASSWORD);
+    console.log("Login attempt");
+    
+    // Fetch admin settings from Supabase
+    const adminSettings = await getAdminSettingsFromSupabase();
+    
+    if (!adminSettings) {
+      error.textContent = "Unable to connect to server. Please check your setup.";
+      error.style.color = "#d93025";
+      error.style.display = "block";
+      return;
+    }
 
-    if (password === ADMIN_PASSWORD) {
+    if (password === adminSettings.password_hash) {
       console.log("Password correct, logging in...");
       setAdminAuth(true);
       loginSection.style.display = "none";
@@ -69,6 +73,144 @@ const setupAdminLogin = () => {
   });
   
   console.log("Form submit listener attached");
+};
+
+// Password Reset functionality
+const setupPasswordReset = () => {
+  const modal = document.getElementById("password-reset-modal");
+  const forgotBtn = document.getElementById("forgot-password-btn");
+  const closeBtn = document.getElementById("password-reset-close");
+  
+  const step1 = document.getElementById("reset-step-1");
+  const step2 = document.getElementById("reset-step-2");
+  
+  const requestForm = document.getElementById("request-otp-form");
+  const verifyForm = document.getElementById("verify-otp-form");
+  
+  const requestMessage = document.getElementById("request-otp-message");
+  const verifyMessage = document.getElementById("verify-otp-message");
+  
+  const cancelBtn = document.getElementById("request-otp-cancel");
+  const backBtn = document.getElementById("verify-otp-back");
+
+  if (!modal || !forgotBtn) return;
+
+  const showMessage = (element, message, isSuccess = false) => {
+    element.textContent = message;
+    element.className = `password-message show ${isSuccess ? 'success' : 'error'}`;
+  };
+
+  const hideMessage = (element) => {
+    element.classList.remove('show');
+  };
+
+  const openModal = () => {
+    step1.style.display = "block";
+    step2.style.display = "none";
+    requestForm.reset();
+    verifyForm.reset();
+    hideMessage(requestMessage);
+    hideMessage(verifyMessage);
+    modal.classList.add("open");
+    modal.removeAttribute("aria-hidden");
+  };
+
+  const closeModal = () => {
+    modal.classList.remove("open");
+    modal.setAttribute("aria-hidden", "true");
+  };
+
+  const goToStep2 = () => {
+    step1.style.display = "none";
+    step2.style.display = "block";
+    hideMessage(requestMessage);
+  };
+
+  const goToStep1 = () => {
+    step2.style.display = "none";
+    step1.style.display = "block";
+    hideMessage(verifyMessage);
+  };
+
+  forgotBtn.addEventListener("click", openModal);
+  closeBtn.addEventListener("click", closeModal);
+  cancelBtn.addEventListener("click", closeModal);
+  backBtn.addEventListener("click", goToStep1);
+
+  // Step 1: Request OTP
+  requestForm.addEventListener("submit", async (e) => {
+    e.preventDefault();
+    const email = document.getElementById("reset-email").value.trim();
+
+    if (!email) {
+      showMessage(requestMessage, "Please enter your email", false);
+      return;
+    }
+
+    // Disable submit button
+    const submitBtn = requestForm.querySelector('button[type="submit"]');
+    submitBtn.disabled = true;
+    submitBtn.textContent = "Sending...";
+
+    const result = await requestPasswordReset(email);
+
+    submitBtn.disabled = false;
+    submitBtn.textContent = "Send OTP";
+
+    if (result.success) {
+      showMessage(requestMessage, result.message, true);
+      setTimeout(() => {
+        goToStep2();
+      }, 1500);
+    } else {
+      showMessage(requestMessage, result.message || "Failed to send OTP", false);
+    }
+  });
+
+  // Step 2: Verify OTP and Reset Password
+  verifyForm.addEventListener("submit", async (e) => {
+    e.preventDefault();
+    const email = document.getElementById("reset-email").value.trim();
+    const otp = document.getElementById("otp-code").value.trim();
+    const newPassword = document.getElementById("reset-new-password").value;
+    const confirmPassword = document.getElementById("reset-confirm-password").value;
+
+    // Validation
+    if (!otp || otp.length !== 6) {
+      showMessage(verifyMessage, "Please enter a valid 6-digit OTP", false);
+      return;
+    }
+
+    if (newPassword.length < 6) {
+      showMessage(verifyMessage, "Password must be at least 6 characters", false);
+      return;
+    }
+
+    if (newPassword !== confirmPassword) {
+      showMessage(verifyMessage, "Passwords do not match", false);
+      return;
+    }
+
+    // Disable submit button
+    const submitBtn = verifyForm.querySelector('button[type="submit"]');
+    submitBtn.disabled = true;
+    submitBtn.textContent = "Resetting...";
+
+    const result = await resetPasswordWithOTP(email, otp, newPassword);
+
+    submitBtn.disabled = false;
+    submitBtn.textContent = "Reset Password";
+
+    if (result.success) {
+      showMessage(verifyMessage, "Password reset successfully!", true);
+      setTimeout(() => {
+        closeModal();
+        alert("Password reset successfully! Please login with your new password.");
+      }, 1500);
+    } else {
+      showMessage(verifyMessage, result.message || "Failed to reset password", false);
+    }
+  });
 };
 
 // Logout functionality
@@ -786,6 +928,73 @@ const setupCouponActions = () => {
   };
 };
 
+// Password Change Management
+const setupPasswordChange = () => {
+  const form = document.getElementById("password-change-form");
+  const resetBtn = document.getElementById("password-reset-btn");
+  const messageEl = document.getElementById("password-change-message");
+
+  if (!form || !messageEl) return;
+
+  const showMessage = (message, isSuccess = false) => {
+    messageEl.textContent = message;
+    messageEl.className = `password-message show ${isSuccess ? 'success' : 'error'}`;
+    setTimeout(() => {
+      messageEl.classList.remove('show');
+    }, 5000);
+  };
+
+  const resetForm = () => {
+    form.reset();
+    messageEl.classList.remove('show');
+  };
+
+  if (resetBtn) {
+    resetBtn.addEventListener("click", resetForm);
+  }
+
+  form.addEventListener("submit", async (e) => {
+    e.preventDefault();
+
+    const currentPassword = document.getElementById("current-password").value;
+    const newPassword = document.getElementById("new-password").value;
+    const confirmPassword = document.getElementById("confirm-password").value;
+
+    // Validation
+    if (newPassword.length < 6) {
+      showMessage("New password must be at least 6 characters long", false);
+      return;
+    }
+
+    if (newPassword !== confirmPassword) {
+      showMessage("New passwords do not match", false);
+      return;
+    }
+
+    // Verify current password
+    const adminSettings = await getAdminSettingsFromSupabase();
+    if (!adminSettings) {
+      showMessage("Unable to verify current password", false);
+      return;
+    }
+    
+    if (currentPassword !== adminSettings.password_hash) {
+      showMessage("Current password is incorrect", false);
+      return;
+    }
+
+    // Update password
+    const result = await updateAdminPasswordInSupabase(newPassword);
+    
+    if (result.success) {
+      showMessage(result.message, true);
+      resetForm();
+    } else {
+      showMessage(result.message || "Failed to change password", false);
+    }
+  });
+};
+
 // Initialize admin panel
 document.addEventListener("DOMContentLoaded", () => {
   console.log("DOMContentLoaded fired");
@@ -798,10 +1007,12 @@ document.addEventListener("DOMContentLoaded", () => {
 
   console.log("Initializing admin panel");
   setupAdminLogin();
+  setupPasswordReset();
   setupAdminLogout();
   setupAdminTabs();
   setupOrderActions();
   setupProductStatusUpdates();
   setupProductModal();
   setupCouponModal();
+  setupPasswordChange();
 });

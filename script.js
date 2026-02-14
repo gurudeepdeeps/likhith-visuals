@@ -9,10 +9,10 @@ const PRODUCTS_STORAGE_KEY = "admin-products";
 const EMAILJS_PUBLIC_KEY = "B7zVzclIjXPJJ6C0D";
 const EMAILJS_SERVICE_ID = "service_5bgbrab";
 const EMAILJS_TEMPLATE_ID = "template_vqs92b6";
-const EMAILJS_ADMIN_TEMPLATE_ID = "template_admin_notify";
+const EMAILJS_ADMIN_TEMPLATE_ID = "template_admin_notify"; // Handles both admin notifications AND OTP emails
 
 const ADMIN_EMAIL = "likhithlikhith278@gmail.com";
-const ADMIN_PASSWORD = "Admin@123";
+// Note: Admin password is now stored in Supabase, not hardcoded
 
 // Razorpay Configuration
 const RAZORPAY_KEY_ID = "rzp_live_SFYqqjGhiIoOeV";
@@ -1162,6 +1162,201 @@ const validateCouponFromSupabase = async (couponCode) => {
     console.error("Failed to validate coupon:", error);
     return null;
   }
+};
+
+// ==================== ADMIN PASSWORD MANAGEMENT ====================
+
+const getAdminSettingsFromSupabase = async () => {
+  if (!supabaseClient) {
+    console.warn("Supabase not initialized");
+    return null;
+  }
+
+  try {
+    const { data, error } = await supabaseClient
+      .from('admin_settings')
+      .select('*')
+      .eq('id', 1)
+      .single();
+
+    if (error) {
+      console.error("Supabase get admin settings error:", error);
+      return null;
+    }
+
+    return data;
+  } catch (error) {
+    console.error("Failed to get admin settings from Supabase:", error);
+    return null;
+  }
+};
+
+const updateAdminPasswordInSupabase = async (newPassword) => {
+  if (!supabaseClient) {
+    console.warn("Supabase not initialized");
+    return { success: false, message: "Database connection not available" };
+  }
+
+  if (!newPassword || newPassword.length < 6) {
+    return { success: false, message: "Password must be at least 6 characters long" };
+  }
+
+  try {
+    const { error } = await supabaseClient
+      .from('admin_settings')
+      .update({
+        password_hash: newPassword,
+        updated_at: new Date().toISOString()
+      })
+      .eq('id', 1);
+
+    if (error) {
+      console.error("Supabase update admin password error:", error);
+      return { success: false, message: error.message || "Failed to update password" };
+    }
+
+    console.log("Admin password updated successfully");
+    return { success: true, message: "Password changed successfully!" };
+  } catch (error) {
+    console.error("Failed to update admin password:", error);
+    return { success: false, message: "An error occurred while updating password" };
+  }
+};
+
+// ==================== ADMIN OTP MANAGEMENT ====================
+
+const generateOTP = () => {
+  return Math.floor(100000 + Math.random() * 900000).toString();
+};
+
+const storeOTPInSupabase = async (email, otpCode) => {
+  if (!supabaseClient) {
+    return { success: false, message: "Database connection not available" };
+  }
+
+  try {
+    // Set expiry to 10 minutes from now
+    const expiresAt = new Date(Date.now() + 10 * 60 * 1000).toISOString();
+
+    const { error } = await supabaseClient
+      .from('admin_otp')
+      .insert({
+        email: email,
+        otp_code: otpCode,
+        expires_at: expiresAt,
+        used: false
+      });
+
+    if (error) {
+      console.error("Supabase store OTP error:", error);
+      return { success: false, message: "Failed to generate OTP" };
+    }
+
+    return { success: true };
+  } catch (error) {
+    console.error("Failed to store OTP:", error);
+    return { success: false, message: "An error occurred" };
+  }
+};
+
+const verifyOTPFromSupabase = async (email, otpCode) => {
+  if (!supabaseClient) {
+    return { success: false, message: "Database connection not available" };
+  }
+
+  try {
+    const { data, error } = await supabaseClient
+      .from('admin_otp')
+      .select('*')
+      .eq('email', email)
+      .eq('otp_code', otpCode)
+      .eq('used', false)
+      .gt('expires_at', new Date().toISOString())
+      .order('created_at', { ascending: false })
+      .limit(1)
+      .single();
+
+    if (error) {
+      if (error.code === 'PGRST116') {
+        return { success: false, message: "Invalid or expired OTP" };
+      }
+      console.error("Supabase verify OTP error:", error);
+      return { success: false, message: "Verification failed" };
+    }
+
+    // Mark OTP as used
+    await supabaseClient
+      .from('admin_otp')
+      .update({ used: true })
+      .eq('id', data.id);
+
+    return { success: true };
+  } catch (error) {
+    console.error("Failed to verify OTP:", error);
+    return { success: false, message: "An error occurred" };
+  }
+};
+
+const sendOTPEmail = async (email, otpCode) => {
+  if (!window.emailjs) {
+    return { success: false, message: "Email service not available" };
+  }
+
+  try {
+    const templateParams = {
+      to_email: email,
+      otp_code: otpCode,
+      expiry_minutes: "10"
+    };
+
+    await window.emailjs.send(
+      EMAILJS_SERVICE_ID,
+      EMAILJS_ADMIN_TEMPLATE_ID,
+      templateParams
+    );
+
+    console.log("OTP email sent successfully");
+    return { success: true };
+  } catch (error) {
+    console.error("Failed to send OTP email:", error);
+    return { success: false, message: "Failed to send email" };
+  }
+};
+
+const requestPasswordReset = async (email) => {
+  // Verify email matches admin email
+  const adminSettings = await getAdminSettingsFromSupabase();
+  if (!adminSettings || adminSettings.admin_email !== email) {
+    return { success: false, message: "Email not found" };
+  }
+
+  // Generate OTP
+  const otpCode = generateOTP();
+
+  // Store OTP in database
+  const storeResult = await storeOTPInSupabase(email, otpCode);
+  if (!storeResult.success) {
+    return storeResult;
+  }
+
+  // Send OTP via email
+  const emailResult = await sendOTPEmail(email, otpCode);
+  if (!emailResult.success) {
+    return emailResult;
+  }
+
+  return { success: true, message: "OTP sent to your email" };
+};
+
+const resetPasswordWithOTP = async (email, otpCode, newPassword) => {
+  // Verify OTP
+  const verifyResult = await verifyOTPFromSupabase(email, otpCode);
+  if (!verifyResult.success) {
+    return verifyResult;
+  }
+
+  // Update password
+  return await updateAdminPasswordInSupabase(newPassword);
 };
 
 const ensureSeededCart = () => {

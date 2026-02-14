@@ -1522,6 +1522,66 @@ a {
   margin-top: 8px;
 }
 
+.settings-container {
+  max-width: 600px;
+  margin: 0 auto;
+}
+
+.settings-card {
+  background: #fff;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 24px;
+  margin-bottom: 24px;
+}
+
+.settings-card-title {
+  font-size: 18px;
+  font-weight: 700;
+  margin-bottom: 20px;
+  color: var(--text);
+}
+
+.password-message {
+  padding: 12px;
+  border-radius: 8px;
+  font-size: 13px;
+  margin-top: 8px;
+  display: none;
+}
+
+.password-message.show {
+  display: block;
+}
+
+.password-message.success {
+  background: #e6f4ea;
+  color: #0f9d58;
+  border: 1px solid #0f9d58;
+}
+
+.password-message.error {
+  background: #fce8e6;
+  color: #d93025;
+  border: 1px solid #d93025;
+}
+
+.reset-step {
+  margin-top: 16px;
+}
+
+.reset-step small {
+  color: var(--muted);
+  font-size: 12px;
+  display: block;
+  margin-top: 4px;
+}
+
+#forgot-password-btn {
+  margin-top: 8px;
+  width: 100%;
+}
+
 @media (max-width: 768px) {
   .admin-tabs {
     overflow-x: auto;

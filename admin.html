@@ -32,8 +32,60 @@
             <input id="admin-password" type="password" placeholder="Enter admin password" required />
           </label>
           <button class="button solid" type="submit">Login</button>
+          <button class="button ghost" type="button" id="forgot-password-btn">Forgot Password?</button>
           <div class="admin-error" id="admin-login-error"></div>
         </form>
+      </div>
+    </div>
+
+    <!-- Password Reset Modal -->
+    <div class="qr-modal" id="password-reset-modal" aria-hidden="true">
+      <div class="qr-modal-card" role="dialog" aria-modal="true">
+        <button class="qr-close" type="button" id="password-reset-close" aria-label="Close">x</button>
+        <h2 id="password-reset-title">Reset Password</h2>
+
+        <!-- Step 1: Request OTP -->
+        <div id="reset-step-1" class="reset-step">
+          <form id="request-otp-form" class="product-form">
+            <label class="detail-field">
+              <span>Admin Email</span>
+              <input id="reset-email" type="email" placeholder="Enter your admin email" required />
+            </label>
+            <div class="password-message" id="request-otp-message"></div>
+            <div class="product-form-actions">
+              <button class="button solid" type="submit">Send OTP</button>
+              <button class="button ghost" type="button" id="request-otp-cancel">Cancel</button>
+            </div>
+          </form>
+        </div>
+
+        <!-- Step 2: Verify OTP and Set New Password -->
+        <div id="reset-step-2" class="reset-step" style="display: none;">
+          <form id="verify-otp-form" class="product-form">
+            <label class="detail-field">
+              <span>OTP Code</span>
+              <input id="otp-code" type="text" placeholder="Enter 6-digit OTP" maxlength="6" pattern="[0-9]{6}" required />
+              <small>Check your email for the OTP code (valid for 10 minutes)</small>
+            </label>
+
+            <label class="detail-field">
+              <span>New Password</span>
+              <input id="reset-new-password" type="password" placeholder="Enter new password" required minlength="6" />
+            </label>
+
+            <label class="detail-field">
+              <span>Confirm New Password</span>
+              <input id="reset-confirm-password" type="password" placeholder="Confirm new password" required minlength="6" />
+            </label>
+
+            <div class="password-message" id="verify-otp-message"></div>
+
+            <div class="product-form-actions">
+              <button class="button solid" type="submit">Reset Password</button>
+              <button class="button ghost" type="button" id="verify-otp-back">Back</button>
+            </div>
+          </form>
+        </div>
       </div>
     </div>
 
@@ -43,6 +95,7 @@
         <button class="admin-tab active" data-tab="orders">Orders</button>
         <button class="admin-tab" data-tab="products">Products</button>
         <button class="admin-tab" data-tab="coupons">Coupons</button>
+        <button class="admin-tab" data-tab="settings">Settings</button>
       </nav>
 
       <!-- Orders Tab -->
@@ -137,6 +190,42 @@
               </tr>
             </tbody>
           </table>
+        </div>
+      </section>
+
+      <!-- Settings Tab -->
+      <section class="admin-section" id="tab-settings" style="display: none">
+        <div class="admin-section-header">
+          <h2 class="section-title">Admin Settings</h2>
+        </div>
+
+        <div class="settings-container">
+          <div class="settings-card">
+            <h3 class="settings-card-title">Change Password</h3>
+            <form id="password-change-form" class="product-form">
+              <label class="detail-field">
+                <span>Current Password</span>
+                <input id="current-password" type="password" placeholder="Enter current password" required />
+              </label>
+
+              <label class="detail-field">
+                <span>New Password</span>
+                <input id="new-password" type="password" placeholder="Enter new password" required minlength="6" />
+              </label>
+
+              <label class="detail-field">
+                <span>Confirm New Password</span>
+                <input id="confirm-password" type="password" placeholder="Confirm new password" required minlength="6" />
+              </label>
+
+              <div class="password-message" id="password-change-message"></div>
+
+              <div class="product-form-actions">
+                <button class="button solid" type="submit">Change Password</button>
+                <button class="button ghost" type="button" id="password-reset-btn">Reset Form</button>
+              </div>
+            </form>
+          </div>
         </div>
       </section>
     </main>
@@ -276,6 +365,7 @@
       </div>
     </div>
 
+    <script src="https://cdn.jsdelivr.net/npm/@emailjs/browser@4/dist/email.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <script src="script.js"></script>
     <script src="admin.js"></script>
