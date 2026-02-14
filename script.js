@@ -432,6 +432,28 @@ const initEmailJs = () => {
   window.emailjs.init(EMAILJS_PUBLIC_KEY);
 };
 
+const getOrderDownloadLinks = (order) => {
+  if (!order || order.paymentStatus !== "paid") {
+    return [];
+  }
+
+  const catalog = getActiveProductCatalog();
+  return (order.items || [])
+    .map((item) => {
+      const product = catalog.find((entry) => entry.id === item.id);
+      const url = product?.downloadUrl;
+      if (!url) {
+        return null;
+      }
+
+      return { title: item.title || product.title || "Download", url };
+    })
+    .filter(Boolean);
+};
+
+const formatDownloadLinksText = (links) =>
+  links.map((entry) => `${entry.title}: ${entry.url}`).join("\n");
+
 const sendOrderEmail = (order) => {
   console.log("📧 sendOrderEmail called", { orderId: order?.id });
   
@@ -463,6 +485,13 @@ const sendOrderEmail = (order) => {
     total: Number(order.amount || 0).toFixed(2),
   };
 
+  const downloadLinks = getOrderDownloadLinks(order);
+  const downloadLinksText = downloadLinks.length
+    ? formatDownloadLinksText(downloadLinks)
+    : order.paymentStatus === "paid"
+      ? ""
+      : "Payment pending. Download links will be sent after confirmation.";
+
   console.log("📧 Sending customer email to:", order.customer.email);
 
   window.emailjs
@@ -476,6 +505,7 @@ const sendOrderEmail = (order) => {
       customer_phone: order.customer.phone || "",
       order_total: formatPrice(order.amount),
       order_date: new Date(order.createdAt).toLocaleString(),
+      download_links: downloadLinksText,
     })
     .then(() => {
       console.log("✅ Customer email sent successfully");
@@ -742,6 +772,7 @@ const saveProductToSupabase = async (product) => {
         price: product.price,
         old_price: product.oldPrice || null,
         image: product.image || "",
+        download_url: product.downloadUrl || "",
         tag: product.tag || "",
         rating: product.rating || 0,
         description: product.description || "",
@@ -750,14 +781,22 @@ const saveProductToSupabase = async (product) => {
       });
 
     if (error) {
-      console.error("Supabase product save error:", error);
+      console.error("❌ Supabase product save error:", error);
+      console.error("Error details:", {
+        message: error.message,
+        code: error.code,
+        details: error.details,
+        hint: error.hint
+      });
+      alert(`Supabase Error: ${error.message}\n\nMake sure the 'products' table exists and has all required columns (including download_url).`);
       return false;
     }
 
-    console.log("Product saved to Supabase successfully");
+    console.log("✅ Product saved to Supabase successfully");
     return true;
   } catch (error) {
-    console.error("Failed to save product to Supabase:", error);
+    console.error("❌ Failed to save product to Supabase:", error);
+    alert(`Error: ${error.message}`);
     return false;
   }
 };
@@ -822,6 +861,7 @@ const loadProductsFromSupabase = async () => {
       return data.map(product => ({
         ...product,
         oldPrice: product.old_price || product.oldPrice || 0,
+        downloadUrl: product.download_url || product.downloadUrl || "",
         description: product.description || "",
         features: Array.isArray(product.features) ? product.features : [],
       }));
@@ -866,6 +906,7 @@ const seedProductsToSupabaseOnce = async () => {
       price: product.price,
       old_price: product.oldPrice || null,
       image: product.image || "",
+      download_url: product.downloadUrl || "",
       tag: product.tag || "",
       rating: product.rating || 0,
       description: product.description || "",
@@ -896,6 +937,7 @@ const normalizeSupabaseProduct = (product) => ({
   oldPrice: Number(product.oldPrice || product.price) || 0,
   tag: product.tag || "",
   image: product.image || "",
+  downloadUrl: product.downloadUrl || product.download_url || "",
   rating: Number(product.rating) || 0,
   description: product.description || "",
   features: Array.isArray(product.features) ? product.features : [],
@@ -1184,16 +1226,40 @@ const renderOrderSuccess = () => {
     <div><strong>Total:</strong> ${formatPrice(order.amount || 0)}</div>
   `;
 
-  items.innerHTML = (order.items || [])
-    .map(
-      (item) => `
-        <div class="order-success-item">
-          <span>${item.title}</span>
-          <span>x${item.qty}</span>
+  const downloads = getOrderDownloadLinks(order);
+  const downloadMarkup = downloads.length
+    ? `
+        <div class="order-downloads">
+          <div class="order-downloads-title">Download links</div>
+          ${downloads
+            .map(
+              (entry) =>
+                `<a class="order-download-link" href="${entry.url}" target="_blank" rel="noopener">${entry.title}</a>`
+            )
+            .join("")}
         </div>
       `
-    )
-    .join("");
+    : `
+        <div class="order-downloads-note">
+          ${
+            order.paymentStatus === "paid"
+              ? "Download links are not available for this order yet."
+              : "Payment pending. Download links will appear after confirmation."
+          }
+        </div>
+      `;
+
+  items.innerHTML =
+    (order.items || [])
+      .map(
+        (item) => `
+          <div class="order-success-item">
+            <span>${item.title}</span>
+            <span>x${item.qty}</span>
+          </div>
+        `
+      )
+      .join("") + downloadMarkup;
 };
 
 const renderCart = (cart) => {
@@ -2016,10 +2082,6 @@ document.addEventListener("DOMContentLoaded", async () => {
     setupOrderHistoryActions();
   }
 
-  if (document.body.dataset.page === "order-success") {
-    renderOrderSuccess();
-  }
-
   await seedProductsToSupabaseOnce();
   await syncProductsFromSupabase();
   await renderHomeProducts();
@@ -2032,4 +2094,8 @@ document.addEventListener("DOMContentLoaded", async () => {
   setupProductLinks();
   await setupProductDetailsPage();
   setupCoupon();
+
+  if (document.body.dataset.page === "order-success") {
+    renderOrderSuccess();
+  }
 });

@@ -422,6 +422,7 @@ const openProductModal = async (productId = null) => {
     document.getElementById("product-tag").value = product.tag || "";
     document.getElementById("product-rating").value = product.rating || "";
     document.getElementById("product-image").value = product.image;
+    document.getElementById("product-download-url").value = product.downloadUrl || "";
     document.getElementById("product-description").value = product.description || "";
     document.getElementById("product-features").value = (product.features || []).join("\n");
   } else {
@@ -530,6 +531,7 @@ const saveProductFromForm = async () => {
     tag: document.getElementById("product-tag").value.trim(),
     rating: Number(document.getElementById("product-rating").value) || 5,
     image: imageUrl,
+    downloadUrl: document.getElementById("product-download-url").value.trim(),
     description: document.getElementById("product-description").value.trim(),
     features: document
       .getElementById("product-features")

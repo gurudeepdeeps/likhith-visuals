@@ -11,7 +11,8 @@ ADD COLUMN IF NOT EXISTS razorpay_signature TEXT;
 
 -- 2. Add old_price column to products table (for showing discounts)
 ALTER TABLE products
-ADD COLUMN IF NOT EXISTS old_price DECIMAL(10,2);
+ADD COLUMN IF NOT EXISTS old_price DECIMAL(10,2),
+ADD COLUMN IF NOT EXISTS download_url TEXT;
 
 -- 3. Update payment_method default for Razorpay
 ALTER TABLE orders 
